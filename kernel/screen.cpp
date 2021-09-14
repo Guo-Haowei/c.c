@@ -1,15 +1,11 @@
-#include "screen.h"
+#include "screen.hpp"
 
-#include "drivers/ports.h"
+#include "drivers/ports.hpp"
 
 static constexpr int MAX_ROWS = 25;
 static constexpr int MAX_COLS = 80;
 
 static constexpr size_t VIDEO_ADDRESS = 0xb8000;
-
-/* Screen i/o ports */
-#define REG_SCREEN_CTRL 0x3d4
-#define REG_SCREEN_DATA 0x3d5
 
 struct ScreenChar {
     uint8_t character;

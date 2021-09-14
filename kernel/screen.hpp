@@ -1,5 +1,5 @@
 #pragma once
-#include "vga_color.h"
+#include "vga_color.hpp"
 
 void kprint_clear();
 
