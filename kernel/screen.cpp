@@ -12,10 +12,14 @@ struct ScreenChar {
     uint8_t color;
 };
 
+static struct {
+    uint8_t color;
+} s_glob;
+
 /* Declaration of private functions */
 int get_cursor_offset();
 void set_cursor_offset( int offset );
-int print_char( char c, int col, int row, char attr );
+int print_char( uint8_t c, int col, int row );
 
 /* offset helpers */
 static constexpr int get_offset( int col, int row )
@@ -31,6 +35,11 @@ static constexpr int get_offset_row( int offset )
 static constexpr int get_offset_col( int offset )
 {
     return ( offset - ( get_offset_row( offset ) * 2 * MAX_COLS ) ) / 2;
+}
+
+void kprint_color( uint8_t color )
+{
+    s_glob.color = color;
 }
 
 /**
@@ -54,7 +63,7 @@ void kprint_at( const char *str, int col, int row )
 
     for ( const char *p = str; *p; ++p )
     {
-        offset = print_char( *p, col, row, WHITE_ON_BLACK );
+        offset = print_char( *p, col, row );
         row    = get_offset_row( offset );
         col    = get_offset_col( offset );
     }
@@ -80,20 +89,18 @@ void kprint( const char *str )
 
 void kprint_byte( uint8_t c )
 {
-    print_char( c, 0, 0, make_vga_color( VgaColor::Yellow, VgaColor::Black ) );
+    print_char( c, 0, 0 );
 }
 
-int print_char( char c, int col, int row, char attr )
+int print_char( uint8_t c, int col, int row )
 {
     uint8_t *vidmem = reinterpret_cast<uint8_t *>( VIDEO_ADDRESS );
-    if ( !attr )
-        attr = WHITE_ON_BLACK;
 
     /* Error control: print a red 'E' if the coords aren't right */
     if ( col >= MAX_COLS || row >= MAX_ROWS )
     {
         vidmem[2 * ( MAX_COLS ) * (MAX_ROWS)-2] = 'E';
-        vidmem[2 * ( MAX_COLS ) * (MAX_ROWS)-1] = RED_ON_WHITE;
+        vidmem[2 * ( MAX_COLS ) * (MAX_ROWS)-1] = make_vga_color( VgaColor::Red, VgaColor::White );
         return get_offset( col, row );
     }
 
@@ -111,7 +118,7 @@ int print_char( char c, int col, int row, char attr )
     else
     {
         vidmem[offset]     = c;
-        vidmem[offset + 1] = attr;
+        vidmem[offset + 1] = s_glob.color;
         offset += 2;
     }
     set_cursor_offset( offset );
@@ -151,7 +158,7 @@ void kprint_clear()
     for ( i = 0; i < screen_size; i++ )
     {
         vidmem[i * 2]     = ' ';
-        vidmem[i * 2 + 1] = WHITE_ON_BLACK;
+        vidmem[i * 2 + 1] = VGA_DEFAULT_COLOR;
     }
     set_cursor_offset( get_offset( 0, 0 ) );
 }

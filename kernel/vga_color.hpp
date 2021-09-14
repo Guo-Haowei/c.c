@@ -25,5 +25,6 @@ static constexpr uint8_t make_vga_color( VgaColor foreground, VgaColor backgroun
     return ( static_cast<uint8_t>( background ) << 4 ) | ( static_cast<uint8_t>( foreground ) );
 }
 
-static constexpr uint8_t WHITE_ON_BLACK = make_vga_color( VgaColor::White, VgaColor::Black );
-static constexpr uint8_t RED_ON_WHITE   = make_vga_color( VgaColor::Red, VgaColor::White );
+static constexpr uint8_t VGA_DEFAULT_COLOR = make_vga_color( VgaColor::White, VgaColor::Black );
+static constexpr uint8_t VGA_WARNING_COLOR = make_vga_color( VgaColor::Yellow, VgaColor::Black );
+static constexpr uint8_t VGA_ERROR_COLOR   = make_vga_color( VgaColor::Red, VgaColor::Black );

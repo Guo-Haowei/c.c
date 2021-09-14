@@ -2,6 +2,7 @@
 #include "vga_color.hpp"
 
 void kprint_clear();
+void kprint_color( uint8_t color );
 
 void kprint_byte( uint8_t c );
 
