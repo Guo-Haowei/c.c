@@ -2,9 +2,9 @@
 # $< = first dependency
 # $^ = all dependencies
 
-C_SOURCES = $(wildcard kernel/*.c drivers/*.c)
+C_SOURCES = $(wildcard kernel/*.cpp drivers/*.cpp)
 HEADERS = $(wildcard kernel/*.h drivers/*.h)
-OBJ = ${C_SOURCES:.c=.o} 
+OBJ = ${C_SOURCES:.cpp=.o} 
 
 CFLAGS = -g -m32 -Wall -Wextra -Werror
 
@@ -18,8 +18,8 @@ kernel.bin: kernel_entry.o ${OBJ}
 kernel_entry.o: kernel/kernel_entry.asm
 	nasm $< -f elf -o $@
 
-%.o: %.c ${HEADERS}
-	i686-elf-gcc -I. ${CFLAGS} -ffreestanding -c $< -o $@
+%.o: %.cpp ${HEADERS}
+	i686-elf-g++ -I. ${CFLAGS} -ffreestanding -c $< -o $@
 	
 bootsect.bin: boot/bootsect.asm
 	nasm $< -f bin -o $@
