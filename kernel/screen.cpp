@@ -7,72 +7,58 @@ static constexpr int MAX_COLS = 80;
 
 static constexpr size_t VIDEO_ADDRESS = 0xb8000;
 
+// TODO: refactor
+
 struct ScreenChar {
     uint8_t character;
     uint8_t color;
 };
 
+static_assert( sizeof( ScreenChar ) == 2 * sizeof( uint8_t ) );
+
 static struct {
     uint8_t color;
-} s_glob;
+    int position;
+} s_screenGlob;
 
-/* Declaration of private functions */
-int get_cursor_offset();
-void set_cursor_offset( int offset );
-int print_char( uint8_t c, int col, int row );
+/// forward declaration
+static int get_cursor_offset();
+static void set_cursor_offset( int offset );
 
-/* offset helpers */
-static constexpr int get_offset( int col, int row )
+/**
+ * @brief
+ *
+ * @param c      The character to print
+ * @param offset The offset
+ * @return
+ */
+static int kprint_byte_internal( uint8_t c, int offset );
+
+void kprint_init()
 {
-    return 2 * ( row * MAX_COLS + col );
+    s_screenGlob.color    = VGA_DEFAULT_COLOR;
+    s_screenGlob.position = get_cursor_offset();
 }
 
-static constexpr int get_offset_row( int offset )
+void kprint_byte( uint8_t c )
 {
-    return offset / ( 2 * MAX_COLS );
-}
-
-static constexpr int get_offset_col( int offset )
-{
-    return ( offset - ( get_offset_row( offset ) * 2 * MAX_COLS ) ) / 2;
+    s_screenGlob.position = kprint_byte_internal( c, s_screenGlob.position );
+    set_cursor_offset( s_screenGlob.position );
 }
 
 void kprint_color( uint8_t color )
 {
-    s_glob.color = color;
+    s_screenGlob.color = color;
 }
 
 /**
  * Print a message on the specified location
  * If col, row, are negative, we will use the current offset
  */
-void kprint_at( const char *str, int col, int row )
-{
-    /* Set cursor if col/row are negative */
-    int offset;
-    if ( col >= 0 && row >= 0 )
-    {
-        offset = get_offset( col, row );
-    }
-    else
-    {
-        offset = get_cursor_offset();
-        row    = get_offset_row( offset );
-        col    = get_offset_col( offset );
-    }
 
-    for ( const char *p = str; *p; ++p )
-    {
-        offset = print_char( *p, col, row );
-        row    = get_offset_row( offset );
-        col    = get_offset_col( offset );
-    }
-}
-
-void kprint( const char *str )
-{
-    kprint_at( str, -1, -1 );
-}
+// void kprint( const char *str )
+// {
+// }
 
 /**********************************************************
  * Private kernel functions                               *
@@ -87,45 +73,7 @@ void kprint( const char *str )
  * Sets the video cursor to the returned offset
  */
 
-void kprint_byte( uint8_t c )
-{
-    print_char( c, 0, 0 );
-}
-
-int print_char( uint8_t c, int col, int row )
-{
-    uint8_t *vidmem = reinterpret_cast<uint8_t *>( VIDEO_ADDRESS );
-
-    /* Error control: print a red 'E' if the coords aren't right */
-    if ( col >= MAX_COLS || row >= MAX_ROWS )
-    {
-        vidmem[2 * ( MAX_COLS ) * (MAX_ROWS)-2] = 'E';
-        vidmem[2 * ( MAX_COLS ) * (MAX_ROWS)-1] = make_vga_color( VgaColor::Red, VgaColor::White );
-        return get_offset( col, row );
-    }
-
-    int offset;
-    if ( col >= 0 && row >= 0 )
-        offset = get_offset( col, row );
-    else
-        offset = get_cursor_offset();
-
-    if ( c == '\n' )
-    {
-        row    = get_offset_row( offset );
-        offset = get_offset( 0, row + 1 );
-    }
-    else
-    {
-        vidmem[offset]     = c;
-        vidmem[offset + 1] = s_glob.color;
-        offset += 2;
-    }
-    set_cursor_offset( offset );
-    return offset;
-}
-
-int get_cursor_offset()
+static int get_cursor_offset()
 {
     /* Use the VGA ports to get the current cursor position
      * 1. Ask for high byte of the cursor offset (data 14)
@@ -135,30 +83,56 @@ int get_cursor_offset()
     int offset = port_byte_in( REG_SCREEN_DATA ) << 8; /* High byte: << 8 */
     port_byte_out( REG_SCREEN_CTRL, 15 );
     offset += port_byte_in( REG_SCREEN_DATA );
-    return offset * 2; /* Position * size of character cell */
+    return offset;
 }
 
-void set_cursor_offset( int offset )
+static void set_cursor_offset( int offset )
 {
     /* Similar to get_cursor_offset, but instead of reading we write data */
-    offset /= 2;
     port_byte_out( REG_SCREEN_CTRL, 14 );
     port_byte_out( REG_SCREEN_DATA, (unsigned char)( offset >> 8 ) );
     port_byte_out( REG_SCREEN_CTRL, 15 );
     port_byte_out( REG_SCREEN_DATA, (unsigned char)( offset & 0xff ) );
 }
 
-void kprint_clear()
+static int kprint_byte_internal( uint8_t c, int offset )
 {
-    int screen_size = MAX_COLS * MAX_ROWS;
-    int i;
-
-    uint8_t *vidmem = reinterpret_cast<uint8_t *>( VIDEO_ADDRESS );
-
-    for ( i = 0; i < screen_size; i++ )
+    ScreenChar *vidmem = reinterpret_cast<ScreenChar *>( VIDEO_ADDRESS );
+    if ( offset >= MAX_COLS * MAX_ROWS )
     {
-        vidmem[i * 2]     = ' ';
-        vidmem[i * 2 + 1] = VGA_DEFAULT_COLOR;
+        offset = MAX_COLS * MAX_ROWS - 1;
+
+        vidmem[offset].character = 'E';
+        vidmem[offset].color     = make_vga_color( VgaColor::Red, VgaColor::White );
+        return offset;
     }
-    set_cursor_offset( get_offset( 0, 0 ) );
+
+    // what if overflow
+    if ( c == '\n' )
+    {
+        offset = ( offset / MAX_COLS + 1 ) * MAX_COLS;
+    }
+    else
+    {
+        vidmem[offset].character = c;
+        vidmem[offset].color     = s_screenGlob.color;
+        ++offset;
+    }
+
+    return offset;
 }
+
+// void kprint_clear()
+// {
+//     int screen_size = MAX_COLS * MAX_ROWS;
+//     int i;
+
+//     uint8_t *vidmem = reinterpret_cast<uint8_t *>( VIDEO_ADDRESS );
+
+//     for ( i = 0; i < screen_size; i++ )
+//     {
+//         vidmem[i * 2]     = ' ';
+//         vidmem[i * 2 + 1] = VGA_DEFAULT_COLOR;
+//     }
+//     set_cursor_offset( get_offset( 0, 0 ) );
+// }
