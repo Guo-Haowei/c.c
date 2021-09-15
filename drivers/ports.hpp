@@ -1,4 +1,4 @@
-#include "common/com_types.hpp"
+#include "common/types.hpp"
 
 /* Screen i/o ports */
 static constexpr uint16_t REG_SCREEN_CTRL = 0x3d4;

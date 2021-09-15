@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common/com_types.hpp"
+#include "common/types.hpp"
 
 static constexpr uint32_t KERNEL_CS = 0x08;
 static constexpr int IDT_ENTRIES    = 256;
