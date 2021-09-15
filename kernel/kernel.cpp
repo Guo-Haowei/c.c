@@ -1,13 +1,24 @@
+#include "cpu/isr.hpp"
 #include "screen.hpp"
 
-#define TEST_VGA 1
+// #define TEST_VGA 1
 
+#if defined( TEST_VGA )
 static void test_vga();
+#endif
 
 extern "C" void _start()
 {
     kprint_init();
+    isr_install();
+
     kprint( "Hello, World!\n" );
+
+    __asm__ __volatile__( "int $2" );
+    __asm__ __volatile__( "int $3" );
+    __asm__ __volatile__( "int $4" );
+    __asm__ __volatile__( "int $5" );
+
 #if defined( TEST_VGA )
     test_vga();
 #endif

@@ -4,7 +4,7 @@
 
 CPP_SOURCES = $(wildcard kernel/*.cpp drivers/*.cpp common/*.cpp cpu/*.cpp)
 HEADERS = $(wildcard kernel/*.hpp drivers/*.hpp common/*.hpp cpu/*.hpp)
-OBJ = ${CPP_SOURCES:.cpp=.o} 
+OBJ = ${CPP_SOURCES:.cpp=.o cpu/interrupt.o} 
 
 CFLAGS = -g -m32 -Wall -Wextra -Werror
 
@@ -20,7 +20,10 @@ kernel_entry.o: kernel/kernel_entry.asm
 
 %.o: %.cpp ${HEADERS}
 	i686-elf-g++ -I. ${CFLAGS} -ffreestanding -c $< -o $@
-	
+
+%.o: %.asm
+	nasm $< -f elf -o $@
+
 bootsect.bin: boot/bootsect.asm
 	nasm $< -f bin -o $@
 

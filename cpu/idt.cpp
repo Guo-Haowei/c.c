@@ -16,7 +16,6 @@ void set_idt()
 {
     g_idt_reg.base  = (uint32_t)&g_idt;
     g_idt_reg.limit = IDT_ENTRIES * sizeof( idt_gate_t ) - 1;
-    /* Don't make the mistake of loading &idt -- always load &idt_reg */
     // clang-format off
     __asm__ __volatile__( "lidtl (%0)" : : "r"( &g_idt_reg ) );
     // clang-format on

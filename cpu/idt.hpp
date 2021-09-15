@@ -1,3 +1,5 @@
+/// Interrupt Descriptor Table
+
 #pragma once
 
 #include "common/types.hpp"
