@@ -2,9 +2,9 @@
 # $< = first dependency
 # $^ = all dependencies
 
-C_SOURCES = $(wildcard kernel/*.cpp drivers/*.cpp common/*.cpp)
-HEADERS = $(wildcard kernel/*.hpp drivers/*.hpp common/*.hpp)
-OBJ = ${C_SOURCES:.cpp=.o} 
+CPP_SOURCES = $(wildcard kernel/*.cpp drivers/*.cpp common/*.cpp cpu/*.cpp)
+HEADERS = $(wildcard kernel/*.hpp drivers/*.hpp common/*.hpp cpu/*.hpp)
+OBJ = ${CPP_SOURCES:.cpp=.o} 
 
 CFLAGS = -g -m32 -Wall -Wextra -Werror
 
