@@ -3,7 +3,7 @@
 # $^ = all dependencies
 
 C_SOURCES = $(wildcard kernel/*.cpp drivers/*.cpp)
-HEADERS = $(wildcard kernel/*.h drivers/*.h)
+HEADERS = $(wildcard kernel/*.hpp drivers/*.hpp)
 OBJ = ${C_SOURCES:.cpp=.o} 
 
 CFLAGS = -g -m32 -Wall -Wextra -Werror
