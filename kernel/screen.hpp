@@ -1,11 +1,9 @@
 #pragma once
-#include <stddef.h>
-
 #include "vga_color.hpp"
 
-static constexpr int SCREEN_WIDTH     = 80;
-static constexpr int SCREEN_HEIGHT    = 25;
-static constexpr size_t VIDEO_ADDRESS = 0xb8000;
+static constexpr int SCREEN_WIDTH       = 80;
+static constexpr int SCREEN_HEIGHT      = 25;
+static constexpr uint32_t VIDEO_ADDRESS = 0xb8000;
 
 void kprint_init();
 

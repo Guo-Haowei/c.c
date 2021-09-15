@@ -1,8 +1,21 @@
 #include "screen.hpp"
 
+#define TEST_VGA 1
+
+static void test_vga();
+
 extern "C" void _start()
 {
     kprint_init();
+    kprint( "Hello, World!\n" );
+#if defined( TEST_VGA )
+    test_vga();
+#endif
+}
+
+#if defined( TEST_VGA )
+static void test_vga()
+{
     kprint_color( VGA_DEFAULT_COLOR );
     kprint( 'H' );
     kprint_color( VGA_WARNING_COLOR );
@@ -35,3 +48,4 @@ extern "C" void _start()
         kprint( msg );
     }
 }
+#endif

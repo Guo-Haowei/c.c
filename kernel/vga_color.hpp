@@ -1,5 +1,5 @@
 #pragma once
-#include <stdint.h>
+#include "common/com_types.hpp"
 
 enum class VgaColor : uint8_t {
     Black,
