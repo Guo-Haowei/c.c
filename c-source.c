@@ -98,14 +98,18 @@ void lex() {
     char *p = g_src;
     while (*p) {
         if (*p == '#' || (*p == '/' && p[1] == '/')) { while (*p && *p != 10) ++p; }
-        else if (IS_WHITESPACE(*p)) { ln += (*p == 10); ++p; }
-        else {
+        else if (IS_WHITESPACE(*p)) {
+            ln += (*p == 10); ++p;
+        } else {
             TK_ATTRIB(g_tkCnt, Ln) = ln;
             TK_ATTRIB(g_tkCnt, Start) = p;
 
             if (IS_LETTER(*p) || *p == '_') {
                 TK_ATTRIB(g_tkCnt, Kind) = Id;
-                ++p; while (IS_LETTER(*p) || IS_DIGIT(*p) || *p == '_') { ++p; }
+                ++p;
+                while (IS_LETTER(*p) || IS_DIGIT(*p) || *p == '_') {
+                    ++p;
+                }
                 TK_ATTRIB(g_tkCnt, End) = p;
                 char *keywords = "int\0     char\0    void\0    break\0   continue\0"
                                  "else\0    enum\0    if\0      return\0  while\0   "
@@ -1053,7 +1057,7 @@ int main(int argc, char **argv) {
     }
 
     g_reserved = 2 * CHUNK_SIZE * argc;
-    g_ram = malloc(g_reserved); // NOTE: whatever, too lazy to free it
+    g_ram = calloc(g_reserved, 1);
 
     // memory layout
     // | instructions | global variables | ... script memory ... | stack |

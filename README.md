@@ -1,5 +1,12 @@
 # c.c
 
+## CMake
+```shell
+$ cmake -S . -B build -A Win32
+```
+
+## Shell
+
 ```shell
 $ sh build.sh
 $ ./c hello.c
