@@ -1,0 +1,12 @@
+name: CI
+run-name: ${{ github.actor }} is testing out GitHub Actions
+on: [push]
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Configure CMake
+        uses: actions/checkout@v4
+      - run: cmake -S . -B build -A Win32
+      - name: Build with CMake
+        run: cmake --build build --config Debug
