@@ -72,43 +72,43 @@ int strlen(char* p) {
 
 #pragma region token
 
-enum /* TokenKind */ {
-       _TK_START = 128, // 0-127 is reserved for ascii
-       TK_INT,          // int
-       TK_IDENT,        // identifier
-       TK_STRING,       // c string
-       TK_CHAR,         // char
+enum {
+	_TK_START = 128, // 0-127 is reserved for ascii
+	TK_INT,          // int
+	TK_IDENT,        // identifier
+	TK_STRING,       // c string
+	TK_CHAR,         // char
 
-       TK_NE,           // !=
-       TK_EQ,           // ==
-       TK_GE,           // >=
-       TK_LE,           // <=
+	TK_NE,           // !=
+	TK_EQ,           // ==
+	TK_GE,           // >=
+	TK_LE,           // <=
 
-       TK_ADD_ASSIGN,   // +=
-       TK_SUB_ASSIGN,   // -=
-       TK_INC,          // ++
-       TK_DEC,          // --
-       TK_AND,          // &&
-       TK_OR,           // ||
-       TK_LSHIFT,       // <<
-       TK_RSHIFT,       // >>
+	TK_ADD_ASSIGN,   // +=
+	TK_SUB_ASSIGN,   // -=
+	TK_INC,          // ++
+	TK_DEC,          // --
+	TK_AND,          // &&
+	TK_OR,           // ||
+	TK_LSHIFT,       // <<
+	TK_RSHIFT,       // >>
 
-       // @TODO: use macro
-       _KW_START,
+	_KW_START, // keywords
 
-       KW_int,      KW_char,    KW_void,    KW_break,   KW_continue,
-       KW_else,     KW_enum,    KW_if,      KW_return,  KW_while,
-       KW_printf,   KW_fopen,   KW_fgetc,   KW_malloc,  KW_memset,
-       KW_exit,
+	KW_int, KW_char, KW_void, KW_break, KW_continue,
+	KW_else, KW_enum, KW_if, KW_return, KW_while,
+	KW_printf, KW_fopen, KW_fgetc, KW_calloc, KW_memset,
+	KW_exit,
 
-       _KW_END,
+	_KW_END,
 
-       // @TODO: the following are opcode
-       Add, Sub, Mul, Div, Rem,
-       Mov, Push, Pop, Load, Save,
-       Neq, Eq, Gt, Ge, Lt, Le, And, Or,
-       Not, Ret, Jz, Jnz, Jump, Call,
-       _BreakStub, _ContStub };
+	// @TODO: refactor the following, because they are opcode
+	Add, Sub, Mul, Div, Rem,
+	Mov, Push, Pop, Load, Save,
+	Neq, Eq, Gt, Ge, Lt, Le, And, Or,
+	Not, Ret, Jz, Jnz, Jump, Call,
+	_BreakStub, _ContStub
+};
 
 // @TODO: implement struct. Use enum and array to mimic array of struct for now
 enum {
@@ -129,7 +129,7 @@ int* g_token_buffer, // global int array to hold token information
 void check_if_token_keyword(int token_idx) {
 	char* keywords = "int\0     char\0    void\0    break\0   continue\0"
 		             "else\0    enum\0    if\0      return\0  while\0   "
-		             "printf\0  fopen\0   fgetc\0   malloc\0  memset\0  "
+		             "printf\0  fopen\0   fgetc\0   calloc\0  memset\0  "
 		             "exit\0    ";
 
 	int start = GET_TK_FIELD(token_idx, TkFieldBegin);
@@ -252,7 +252,7 @@ void dump_tokens() {
             ln = tkln;
         }
         char* names = "Int   Char  Void  Break Cont  Else  Enum  If    "
-                      "Ret   While Print Fopen Fgetc MallocMemsetExit  ";
+                      "Ret   While Print Fopen Fgetc CallocMemsetExit  ";
         printf("%.*s", len, start);
         if (kind >= KW_int) {
             printf("{");
@@ -443,7 +443,7 @@ int primary_expr() {
     int paramCnt = 0, ret = KW_void, i = 0;
     if (kind == KW_fopen) { paramCnt = 2; ret = VOID_PTR; }
     else if (kind == KW_fgetc) { paramCnt = 1; ret = KW_int; }
-    else if (kind == KW_malloc) { paramCnt = 1; ret = VOID_PTR; }
+    else if (kind == KW_calloc) { paramCnt = 2; ret = VOID_PTR; }
     else if (kind == KW_exit) { paramCnt = 1; ret = KW_void; }
     else { COMPILE_ERROR("error:%d: expected expression, got '%.*s'\n", ln, len, start); }
 
@@ -1091,8 +1091,8 @@ void dump_code() {
         } else if (op == Jump || op == Jz || op == Jnz || op == Call) {
             char* opstr = op == Jump ? "jmp" : op == Jz ? "jz" : op == Jnz ? "jnz" : "call";
             printf("  %s %d\n", opstr, imme);
-        } else if (op == KW_printf || op == KW_fopen || op == KW_fgetc || op == KW_malloc || op == KW_exit) {
-            char* opstr = op == KW_printf ? "printf" : op == KW_fopen ? "fopen" : op == KW_fgetc ? "fgetc" : op == KW_malloc ? "malloc" : "exit";
+        } else if (op == KW_printf || op == KW_fopen || op == KW_fgetc || op == KW_calloc || op == KW_exit) {
+            char* opstr = op == KW_printf ? "printf" : op == KW_fopen ? "fopen" : op == KW_fgetc ? "fgetc" : op == KW_calloc ? "calloc" : "exit";
             printf("  %s\n", opstr);
         } else {
             panic("invalid op code");
@@ -1226,8 +1226,8 @@ int main(int argc, char **argv) {
         } else if (op == KW_fopen) {
             int* p = g_regs[ESP];
             g_regs[EAX] = fopen((char*)(p[1]), (char*)(p[0]));
-        } else if (op == KW_malloc) {
-            g_regs[EAX] = g_ram + CHUNK_SIZE;
+        } else if (op == KW_calloc) {
+            g_regs[EAX] = g_ram + CHUNK_SIZE; // @HACK: not really allocating desired amount of memory
         } else if (op == KW_exit) {
             g_regs[EAX] = *((int*)g_regs[ESP]);
             break;

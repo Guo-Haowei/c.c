@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    char* p = malloc(4096);
+    char* p = calloc(4096, 1);
     char* pp = p;
 
     int c;
