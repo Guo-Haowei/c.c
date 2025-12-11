@@ -1,4 +1,5 @@
 import subprocess
+from pathlib import Path
 
 class Log:
     COLOR_RESET = '\033[0m'
@@ -24,11 +25,11 @@ class Log:
         print(f'{Log.COLOR_RED}[ERR ] {msg}{Log.COLOR_RESET}', file=sys.stderr)
 
 def run_command(args, stdout_path=None):
-    """
+    '''
     Run a command.
     If stdout_path is given, redirect stdout to that file.
     Returns the process return code.
-    """
+    '''
 
     Log.info(f'Running command: {" ".join(args)}')
     if stdout_path is not None:
@@ -41,3 +42,12 @@ def run_command(args, stdout_path=None):
         sys.stderr.write(proc.stderr)
 
     return proc.returncode
+
+def rename(src: Path, dst: Path):
+    '''
+    Rename a file from src to dst, overwriting dst if it exists.
+    '''
+    if dst.exists():
+        Log.warn(f'Overwriting existing file: {dst}')
+        dst.unlink()
+    src.rename(dst)
