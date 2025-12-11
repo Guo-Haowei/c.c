@@ -140,8 +140,7 @@ void lex() {
                 (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_IDENT;
                 ++p;
                 while (((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z')) || (*p >= '0' && *p <= '9') || *p == '_') {
-                    ++p
-                        ;
+                    ++p;
                 }
                 (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldEnd]) = p;
                 check_if_token_keyword(g_token_idx);

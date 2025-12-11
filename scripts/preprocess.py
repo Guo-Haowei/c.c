@@ -1,12 +1,7 @@
 import subprocess
-import sys
 from pathlib import Path
 
-def run(cmd):
-    """Run a shell command, exit on failure."""
-    result = subprocess.run(cmd, shell=False)
-    if result.returncode != 0:
-        sys.exit(1)
+from utils import run_command
 
 def rename(src: Path, dst: Path):
     """Rename a file from src to dst, overwriting dst if it exists."""
@@ -22,7 +17,7 @@ def main():
         f.write("#include <stdlib.h>\n")
 
     # 2. Preprocess c-source.c -> tmp.c
-    run(["gcc", "-E", "-DPREPROC", "c-source.c", "-o", "tmp.c"])
+    run_command(["gcc", "-E", "-DPREPROC", "c-source.c", "-o", "tmp.c"])
 
     # 3. Read tmp.c, filter out # lines and blank lines, append to c.c
     with open("tmp.c", "r", encoding="utf-8") as src, \
