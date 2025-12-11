@@ -1,5 +1,8 @@
 build/
+__pycache__/
 
 *.exe
 *.actual
 *.expect
+*.pyc
+tmp.c

@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 int main() {
-    char* p = malloc(4096);
+    char* p = calloc(4096, 1);
     char* src = "hello there one more time";
     int i = 0;
     while (src[i]) {

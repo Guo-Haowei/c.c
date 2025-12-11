@@ -16,7 +16,7 @@
 #define IS_HEX(C) (IS_DIGIT(C) || (C >= 'A' && C <= 'F'))
 #define IS_WHITESPACE(C) (C == ' ' || C == 9 || C == 10 || C == 13)
 #define IS_PUNCT(P, A, B) (*P == A && P[1] == B)
-#define IS_TYPE(KIND) (KIND >= Int && KIND <= Void)
+#define IS_TYPE(KIND) (KIND >= KW_int && KIND <= KW_void)
 #define ALIGN(x) ((x + 3) & -4)
 #define COMPILE_ERROR(...) { printf(__VA_ARGS__); exit(1); }
 #define PUSH(REG, VAL) instruction(Push | (REG << 24), VAL)
@@ -29,8 +29,8 @@
 #define CALL(ENTRY) instruction(Call, ENTRY);
 #define LOADB(DEST, SRC) instruction(Load | (DEST << 8) | (SRC << 16), 1)
 #define LOADW(DEST, SRC) instruction(Load | (DEST << 8) | (SRC << 16), 4)
-#define CHAR_PTR (0xFF0000 | Char)
-#define VOID_PTR (0xFF0000 | Void)
+#define CHAR_PTR (0xFF0000 | KW_char)
+#define VOID_PTR (0xFF0000 | KW_void)
 #define IS_PTR(TYPE) (0xFF0000 & TYPE)
 #define SYM_ATTRIB(IDX, ATTRIB) g_syms[((IDX) * SymSize) + ATTRIB]
 #define OP_ATTRIB(IDX, ATTRIB) g_ops[((IDX) * OpSize) + ATTRIB]
@@ -42,28 +42,11 @@
 #define MAX_SCOPE 128
 #define MAX_CALLS 1024
 
-enum /* TokenKind */ {
-       _TkOffset = 128, // 0-127 is reserved for ascii
-       CInt, Id, CStr, CChar,
-       TkNeq, TkEq, TkGe, TkLe,
-       TkAddTo, TkSubFrom, TkInc, TkDec, TkAnd, TkOr, LShift, RShift,
-       _KeywordStart,
-       Int, Char, Void,
-       Break, Cont, Else, Enum, If, Return, While,
-       Printf, Fopen, Fgetc, Malloc, Memset, Exit,
-       _KeywordEnd,
-       Add, Sub, Mul, Div, Rem,
-       Mov, Push, Pop, Load, Save,
-       Neq, Eq, Gt, Ge, Lt, Le, And, Or,
-       Not, Ret, Jz, Jnz, Jump, Call,
-       _BreakStub, _ContStub };
 enum { Undefined, Global, Param, Local, Func, Const };
 enum { EAX = 1, EBX, ECX, EDX, ESP, EBP, IMME };
 enum { TkIdx, Scope, DType, Storage, Address, SymSize };
 enum { OpCode, Imme, OpSize };
 enum { /* TkIndex = 0, */ InsIdx = 1, CallSize };
-
-char *g_ram, *g_src;
 
 #pragma region utils
 void panic(char* fmt) {
@@ -87,38 +70,77 @@ int strlen(char* p) {
 }
 #pragma endregion utils
 
-// @TODO: implement struct. Use enum and array to mimic array of struct for now
 #pragma region token
-enum {
-	TokenKind,
-	TokenValue, // store the value of token if char or int
-	TokenLine, // current line of a token
-	TokenBegin,
-	TokenEnd,
 
-	_TokenEnumCount,
+enum {
+	_TK_START = 128, // 0-127 is reserved for ascii
+	TK_INT,          // int
+	TK_IDENT,        // identifier
+	TK_STRING,       // c string
+	TK_CHAR,         // char
+
+	TK_NE,           // !=
+	TK_EQ,           // ==
+	TK_GE,           // >=
+	TK_LE,           // <=
+
+	TK_ADD_ASSIGN,   // +=
+	TK_SUB_ASSIGN,   // -=
+	TK_INC,          // ++
+	TK_DEC,          // --
+	TK_AND,          // &&
+	TK_OR,           // ||
+	TK_LSHIFT,       // <<
+	TK_RSHIFT,       // >>
+
+	_KW_START, // keywords
+
+	KW_int, KW_char, KW_void, KW_break, KW_continue,
+	KW_else, KW_enum, KW_if, KW_return, KW_while,
+	KW_printf, KW_fopen, KW_fgetc, KW_calloc, KW_memset,
+	KW_exit,
+
+	_KW_END,
+
+	// @TODO: refactor the following, because they are opcode
+	Add, Sub, Mul, Div, Rem,
+	Mov, Push, Pop, Load, Save,
+	Neq, Eq, Gt, Ge, Lt, Le, And, Or,
+	Not, Ret, Jz, Jnz, Jump, Call,
+	_BreakStub, _ContStub
+};
+
+// @TODO: implement struct. Use enum and array to mimic array of struct for now
+enum {
+	TkFieldKind,
+	TkFieldValue, // store the value of token if char or int
+	TkFieldLine, // current line of a token
+	TkFieldBegin,
+	TkFieldEnd,
+
+	_TkFieldCount,
 };
 
 int* g_token_buffer, // global int array to hold token information
      g_token_idx;    // global index of current token
 
-#define GET_TK_FIELD(IDX, ATTRIB) (g_token_buffer[((IDX) * _TokenEnumCount) + ATTRIB])
+#define GET_TK_FIELD(IDX, ATTRIB) (g_token_buffer[((IDX) * _TkFieldCount) + ATTRIB])
 
 void check_if_token_keyword(int token_idx) {
 	char* keywords = "int\0     char\0    void\0    break\0   continue\0"
 		             "else\0    enum\0    if\0      return\0  while\0   "
-		             "printf\0  fopen\0   fgetc\0   malloc\0  memset\0  "
+		             "printf\0  fopen\0   fgetc\0   calloc\0  memset\0  "
 		             "exit\0    ";
 
-	int start = GET_TK_FIELD(token_idx, TokenBegin);
-	int token_len = GET_TK_FIELD(token_idx, TokenEnd) - start;
+	int start = GET_TK_FIELD(token_idx, TkFieldBegin);
+	int token_len = GET_TK_FIELD(token_idx, TkFieldEnd) - start;
 
 	int idx = 0;
-	while (idx < (_KeywordEnd - Int)) {
+	while (idx < (_KW_END - KW_int)) {
 		char* kw = keywords + (idx * 9); // a keyword is at most 8 char, plus '\0'
 		int keyword_len = strlen(kw);
 		if (keyword_len == token_len && streq(start, kw, 8)) {
-			GET_TK_FIELD(token_idx, TokenKind) = Int + idx;
+			GET_TK_FIELD(token_idx, TkFieldKind) = KW_int + idx;
 			break;
 		}
 		++idx;
@@ -129,6 +151,8 @@ void check_if_token_keyword(int token_idx) {
 #pragma endregion token
 
 // @TODO: refactor
+
+char *g_ram, *g_src;
 
 int g_reserved, g_bss,
     g_tkIter,
@@ -148,63 +172,63 @@ void lex() {
 		} else if (IS_WHITESPACE(*p)) { // handle whitespace
 			ln += (*p == 10); ++p;
 		} else {
-            GET_TK_FIELD(g_token_idx, TokenLine) = ln;
-            GET_TK_FIELD(g_token_idx, TokenBegin) = p;
+            GET_TK_FIELD(g_token_idx, TkFieldLine) = ln;
+            GET_TK_FIELD(g_token_idx, TkFieldBegin) = p;
 
             if (IS_LETTER(*p) || *p == '_') { // handle token or keyword
-                GET_TK_FIELD(g_token_idx, TokenKind) = Id;
+                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_IDENT;
                 ++p;
                 while (IS_LETTER(*p) || IS_DIGIT(*p) || *p == '_') {
                     ++p;
                 }
-                GET_TK_FIELD(g_token_idx, TokenEnd) = p;
+                GET_TK_FIELD(g_token_idx, TkFieldEnd) = p;
                 check_if_token_keyword(g_token_idx);
                 g_token_idx += 1;
             } else if (*p == '0' && p[1] == 'x') { // handle hex number
-                GET_TK_FIELD(g_token_idx, TokenKind) = CInt;
+                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_INT;
                 int result = 0;
                 p += 2; while(IS_HEX(*p)) {
                     result = (result << 4) + ((*p < 'A') ? (*p - '0') : (*p - 55));
                     ++p;
                 }
-                GET_TK_FIELD(g_token_idx, TokenValue) = result;
-                GET_TK_FIELD(g_token_idx++, TokenEnd) = p;
+                GET_TK_FIELD(g_token_idx, TkFieldValue) = result;
+                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = p;
             } else if (IS_DIGIT(*p)) { // handle decimal number
-                GET_TK_FIELD(g_token_idx, TokenKind) = CInt;
+                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_INT;
                 int result = 0;
                 while (IS_DIGIT(*p)) { result = result * 10 + (*p - '0'); ++p; }
-                GET_TK_FIELD(g_token_idx, TokenValue) = result;
-                GET_TK_FIELD(g_token_idx++, TokenEnd) = p;
+                GET_TK_FIELD(g_token_idx, TkFieldValue) = result;
+                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = p;
             } else if (*p == '"') { // handle string
-                GET_TK_FIELD(g_token_idx, TokenKind) = CStr;
+                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_STRING;
                 ++p; while (*p != '"') { ++p; };
-                GET_TK_FIELD(g_token_idx++, TokenEnd) = ++p;
+                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = ++p;
             } else if (*p == 39) { // ascii '''
-                GET_TK_FIELD(g_token_idx, TokenKind) = CChar;
-                GET_TK_FIELD(g_token_idx, TokenValue) = p[1];
-                GET_TK_FIELD(g_token_idx++, TokenEnd) = (p += 3);
+                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_CHAR;
+                GET_TK_FIELD(g_token_idx, TkFieldValue) = p[1];
+                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = (p += 3);
             } else {
-                GET_TK_FIELD(g_token_idx, TokenKind) = *p;
+                GET_TK_FIELD(g_token_idx, TkFieldKind) = *p;
 
-                if (IS_PUNCT(p, '=', '=')) { GET_TK_FIELD(g_token_idx, TokenKind) = TkEq; ++p; }
-                else if (IS_PUNCT(p, '!', '=')) { GET_TK_FIELD(g_token_idx, TokenKind) = TkNeq; ++p; }
-                else if (IS_PUNCT(p, '&', '&')) { GET_TK_FIELD(g_token_idx, TokenKind) = TkAnd; ++p; }
-                else if (IS_PUNCT(p, '|', '|')) { GET_TK_FIELD(g_token_idx, TokenKind) = TkOr; ++p; }
+                if (IS_PUNCT(p, '=', '=')) { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_EQ; ++p; }
+                else if (IS_PUNCT(p, '!', '=')) { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_NE; ++p; }
+                else if (IS_PUNCT(p, '&', '&')) { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_AND; ++p; }
+                else if (IS_PUNCT(p, '|', '|')) { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_OR; ++p; }
                 else if (*p == '+') {
-                    if (p[1] == '+') { GET_TK_FIELD(g_token_idx, TokenKind) = TkInc; ++p; }
-                    else if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TokenKind) = TkAddTo; ++p; }
+                    if (p[1] == '+') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_INC; ++p; }
+                    else if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_ADD_ASSIGN; ++p; }
                 } else if (*p == '-') {
-                    if (p[1] == '-') { GET_TK_FIELD(g_token_idx, TokenKind) = TkDec; ++p; }
-                    else if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TokenKind) = TkSubFrom; ++p; }
+                    if (p[1] == '-') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_DEC; ++p; }
+                    else if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_SUB_ASSIGN; ++p; }
                 } else if (*p == '>') {
-                    if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TokenKind) = TkGe; ++p; }
-                    else if (p[1] == '>') { GET_TK_FIELD(g_token_idx, TokenKind) = RShift; ++p; }
+                    if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_GE; ++p; }
+                    else if (p[1] == '>') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_RSHIFT; ++p; }
                 } else if (*p == '<') {
-                    if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TokenKind) = TkLe; ++p; }
-                    else if (p[1] == '<') { GET_TK_FIELD(g_token_idx, TokenKind) = LShift; ++p; }
+                    if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_LE; ++p; }
+                    else if (p[1] == '<') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_LSHIFT; ++p; }
                 }
 
-                GET_TK_FIELD(g_token_idx++, TokenEnd) = ++p;
+                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = ++p;
             }
         }
     }
@@ -216,10 +240,10 @@ void dump_tokens() {
     printf("-------- lex --------\n");
     int indent = 0, i = 0, ln = 0;
     while (i < g_token_idx) {
-        int tkln = GET_TK_FIELD(i, TokenLine);
-        int kind = GET_TK_FIELD(i, TokenKind);
-        int start = GET_TK_FIELD(i, TokenBegin);
-        int end = GET_TK_FIELD(i, TokenEnd);
+        int tkln = GET_TK_FIELD(i, TkFieldLine);
+        int kind = GET_TK_FIELD(i, TkFieldKind);
+        int start = GET_TK_FIELD(i, TkFieldBegin);
+        int end = GET_TK_FIELD(i, TkFieldEnd);
         int len = end - start;
         if (kind == '{') { indent += 1; }
         else if (kind == '}') { indent -= 1; }
@@ -228,11 +252,11 @@ void dump_tokens() {
             ln = tkln;
         }
         char* names = "Int   Char  Void  Break Cont  Else  Enum  If    "
-                      "Ret   While Print Fopen Fgetc MallocMemsetExit  ";
+                      "Ret   While Print Fopen Fgetc CallocMemsetExit  ";
         printf("%.*s", len, start);
-        if (kind >= Int) {
+        if (kind >= KW_int) {
             printf("{");
-            char *p = names + 6 * (kind - Int); int ii = 0;
+            char *p = names + 6 * (kind - KW_int); int ii = 0;
             while (ii < 6) {
                 if (*p == ' ') break;
                 printf("%c", *p);
@@ -271,25 +295,25 @@ void exit_scope() {
 }
 
 int expect(int kind) {
-    if (GET_TK_FIELD(g_tkIter, TokenKind) != kind) {
-        int start = GET_TK_FIELD(g_tkIter, TokenBegin), end = GET_TK_FIELD(g_tkIter, TokenEnd);
+    if (GET_TK_FIELD(g_tkIter, TkFieldKind) != kind) {
+        int start = GET_TK_FIELD(g_tkIter, TkFieldBegin), end = GET_TK_FIELD(g_tkIter, TkFieldEnd);
         COMPILE_ERROR("error:%d: expected token '%c'(%d), got '%.*s'\n",
-            GET_TK_FIELD(g_tkIter, TokenLine), kind < 128 ? kind : ' ', kind, end - start, start);
+            GET_TK_FIELD(g_tkIter, TkFieldLine), kind < 128 ? kind : ' ', kind, end - start, start);
     }
     return g_tkIter++;
 }
 
 int expect_type() {
-    int base_type = GET_TK_FIELD(g_tkIter, TokenKind);
+    int base_type = GET_TK_FIELD(g_tkIter, TkFieldKind);
     if (IS_TYPE(base_type)) {
         ++g_tkIter;
         int ptr = 0;
-        while (GET_TK_FIELD(g_tkIter, TokenKind) == '*') { ptr = (ptr << 8) | 0xFF; ++g_tkIter; }
+        while (GET_TK_FIELD(g_tkIter, TkFieldKind) == '*') { ptr = (ptr << 8) | 0xFF; ++g_tkIter; }
         return (ptr << 16) | base_type;
     }
 
-    int start = GET_TK_FIELD(g_tkIter, TokenBegin), end = GET_TK_FIELD(g_tkIter, TokenEnd);
-    COMPILE_ERROR("error:%d: expected type specifier, got '%.*s'\n", GET_TK_FIELD(g_tkIter, TokenLine), end - start, start);
+    int start = GET_TK_FIELD(g_tkIter, TkFieldBegin), end = GET_TK_FIELD(g_tkIter, TkFieldEnd);
+    COMPILE_ERROR("error:%d: expected type specifier, got '%.*s'\n", GET_TK_FIELD(g_tkIter, TkFieldLine), end - start, start);
 }
 
 void instruction(int op, int imme) {
@@ -301,18 +325,18 @@ void instruction(int op, int imme) {
 
 int primary_expr() {
     int tkIdx = g_tkIter++;
-    char* start = GET_TK_FIELD(tkIdx, TokenBegin);
-    char* end = GET_TK_FIELD(tkIdx, TokenEnd);
-    int ln = GET_TK_FIELD(tkIdx, TokenLine);
-    int kind = GET_TK_FIELD(tkIdx, TokenKind);
-    int value = GET_TK_FIELD(tkIdx, TokenValue);
+    char* start = GET_TK_FIELD(tkIdx, TkFieldBegin);
+    char* end = GET_TK_FIELD(tkIdx, TkFieldEnd);
+    int ln = GET_TK_FIELD(tkIdx, TkFieldLine);
+    int kind = GET_TK_FIELD(tkIdx, TkFieldKind);
+    int value = GET_TK_FIELD(tkIdx, TkFieldValue);
     int len = end - start;
-    if (kind == CInt || kind == CChar) {
+    if (kind == TK_INT || kind == TK_CHAR) {
         MOV(EAX, IMME, value);
-        return Int;
+        return KW_int;
     }
     
-    if (kind == CStr) {
+    if (kind == TK_STRING) {
         MOV(EAX, IMME, g_bss);
         while (1) {
             len = len - 1;
@@ -329,10 +353,10 @@ int primary_expr() {
                 ++i;
             }
 
-            if (GET_TK_FIELD(g_tkIter, TokenKind) != CStr) break;
-            start = GET_TK_FIELD(g_tkIter, TokenBegin);
-            end = GET_TK_FIELD(g_tkIter, TokenEnd);
-            ln = GET_TK_FIELD(g_tkIter, TokenLine);
+            if (GET_TK_FIELD(g_tkIter, TkFieldKind) != TK_STRING) break;
+            start = GET_TK_FIELD(g_tkIter, TkFieldBegin);
+            end = GET_TK_FIELD(g_tkIter, TkFieldEnd);
+            ln = GET_TK_FIELD(g_tkIter, TkFieldLine);
             len = end - start;
             ++g_tkIter;
         }
@@ -348,11 +372,11 @@ int primary_expr() {
         return data_type;
     }
     
-    if (kind == Id) {
-        if (GET_TK_FIELD(g_tkIter, TokenKind) == '(') {
+    if (kind == TK_IDENT) {
+        if (GET_TK_FIELD(g_tkIter, TkFieldKind) == '(') {
             ++g_tkIter;
             int argc = 0;
-            while (GET_TK_FIELD(g_tkIter, TokenKind) != ')') {
+            while (GET_TK_FIELD(g_tkIter, TkFieldKind) != ')') {
                 if (argc > 0) expect(',');
                 assign_expr();
                 PUSH(EAX, 0);
@@ -365,13 +389,13 @@ int primary_expr() {
             CALL(0);
             if (argc) { ADD(ESP, ESP, IMME, argc << 2); }
             expect(')');
-            return Int;
+            return KW_int;
         }
 
         int address = 0, type = Undefined, data_type = 0, i = g_symCnt - 1;
         while (i >= 0) {
             int tmp = SYM_ATTRIB(i, TkIdx);
-            char *tmpstart = GET_TK_FIELD(tmp, TokenBegin), *tmpend = GET_TK_FIELD(tmp, TokenEnd);
+            char *tmpstart = GET_TK_FIELD(tmp, TkFieldBegin), *tmpend = GET_TK_FIELD(tmp, TkFieldEnd);
             if (len == (tmpend - tmpstart) && streq(start, tmpstart, len)) {
                 address = SYM_ATTRIB(i, Address);
                 type = SYM_ATTRIB(i, Storage);
@@ -388,7 +412,7 @@ int primary_expr() {
         }
         if (type == Const) {
             MOV(EAX, IMME, address);
-            return Int;
+            return KW_int;
         }
         if (type == Undefined) {
             COMPILE_ERROR("error:%d: '%.*s' undeclared\n", ln, len, start);
@@ -399,10 +423,10 @@ int primary_expr() {
         return data_type;
     }
 
-    if (kind == Printf) {
+    if (kind == KW_printf) {
         expect('(');
         int argc = 0;
-        while (GET_TK_FIELD(g_tkIter, TokenKind) != ')') {
+        while (GET_TK_FIELD(g_tkIter, TkFieldKind) != ')') {
             if (argc > 0) expect(',');
             assign_expr();
             PUSH(EAX, 0);
@@ -410,17 +434,17 @@ int primary_expr() {
         }
         if (argc > MAX_PRINF_ARGS) panic("printf supports at most %d args");
         SUB(ESP, ESP, IMME, (MAX_PRINF_ARGS - argc) << 2);
-        instruction(Printf, argc);
+        instruction(KW_printf, argc);
         ADD(ESP, ESP, IMME, MAX_PRINF_ARGS << 2);
         expect(')');
-        return Int;
+        return KW_int;
     }
 
-    int paramCnt = 0, ret = Void, i = 0;
-    if (kind == Fopen) { paramCnt = 2; ret = VOID_PTR; }
-    else if (kind == Fgetc) { paramCnt = 1; ret = Int; }
-    else if (kind == Malloc) { paramCnt = 1; ret = VOID_PTR; }
-    else if (kind == Exit) { paramCnt = 1; ret = Void; }
+    int paramCnt = 0, ret = KW_void, i = 0;
+    if (kind == KW_fopen) { paramCnt = 2; ret = VOID_PTR; }
+    else if (kind == KW_fgetc) { paramCnt = 1; ret = KW_int; }
+    else if (kind == KW_calloc) { paramCnt = 2; ret = VOID_PTR; }
+    else if (kind == KW_exit) { paramCnt = 1; ret = KW_void; }
     else { COMPILE_ERROR("error:%d: expected expression, got '%.*s'\n", ln, len, start); }
 
     expect('(');
@@ -438,8 +462,8 @@ int primary_expr() {
 int post_expr() {
     int data_type = primary_expr();
     while (1) {
-        int kind = GET_TK_FIELD(g_tkIter, TokenKind);
-        int ln = GET_TK_FIELD(g_tkIter, TokenLine);
+        int kind = GET_TK_FIELD(g_tkIter, TkFieldKind);
+        int ln = GET_TK_FIELD(g_tkIter, TkFieldLine);
         if (kind == '[') {
             ++g_tkIter;
             if (!IS_PTR(data_type)) {
@@ -458,12 +482,12 @@ int post_expr() {
             else { LOADW(EAX, EAX); }
             expect(']');
             data_type = ((data_type >> 8) & 0xFF0000) | ((data_type & 0xFFFF));
-        } else if (kind == TkInc || kind == TkDec) {
+        } else if (kind == TK_INC || kind == TK_DEC) {
             ++g_tkIter;
             LOADW(EAX, EDX);
             MOV(EBX, EAX, 0);
             int value = (IS_PTR(data_type) && data_type != CHAR_PTR) ? 4 : 1;
-            int op = kind == TkInc ? Add : Sub;
+            int op = kind == TK_INC ? Add : Sub;
             instruction(OP(op, EBX, EBX, IMME), value);
             SAVEW(EDX, EBX);
         } else {
@@ -474,8 +498,8 @@ int post_expr() {
 }
 
 int unary_expr() {
-    int kind = GET_TK_FIELD(g_tkIter, TokenKind);
-    int ln = GET_TK_FIELD(g_tkIter, TokenLine);
+    int kind = GET_TK_FIELD(g_tkIter, TkFieldKind);
+    int ln = GET_TK_FIELD(g_tkIter, TkFieldLine);
     if (kind == '!') {
         ++g_tkIter;
         int data_type = unary_expr();
@@ -505,12 +529,12 @@ int unary_expr() {
         else LOADW(EAX, EDX);
         return ((data_type >> 8) & 0xFF0000) | (0xFFFF & data_type);
     }
-    if (kind == TkInc || kind == TkDec) {
+    if (kind == TK_INC || kind == TK_DEC) {
         ++g_tkIter;
         int data_type = unary_expr();
         LOADW(EAX, EDX);
         int value = (IS_PTR(data_type) && data_type != CHAR_PTR) ? 4 : 1;
-        int op = kind == TkInc ? Add : Sub;
+        int op = kind == TK_INC ? Add : Sub;
         instruction(OP(op, EAX, EAX, IMME), value);
         SAVEW(EDX, EAX);
         return data_type;
@@ -519,8 +543,8 @@ int unary_expr() {
 }
 
 int cast_expr() {
-    if (GET_TK_FIELD(g_tkIter, TokenKind) == '(') {
-        int kind = GET_TK_FIELD(g_tkIter + 1, TokenKind);
+    if (GET_TK_FIELD(g_tkIter, TkFieldKind) == '(') {
+        int kind = GET_TK_FIELD(g_tkIter + 1, TkFieldKind);
         if (IS_TYPE(kind)) {
             ++g_tkIter; // skip '('
             int data_type = expect_type();
@@ -536,7 +560,7 @@ int cast_expr() {
 int mul_expr() {
     int data_type = cast_expr();
     while (1) {
-        int kind = GET_TK_FIELD(g_tkIter, TokenKind), opcode;
+        int kind = GET_TK_FIELD(g_tkIter, TkFieldKind), opcode;
         if (kind == '*') opcode = Mul;
         else if (kind == '/') opcode = Div;
         else if (kind == '%') opcode = Rem;
@@ -554,7 +578,7 @@ int mul_expr() {
 int add_expr() {
     int data_type = mul_expr();
     while (1) {
-        int kind = GET_TK_FIELD(g_tkIter, TokenKind), opcode;
+        int kind = GET_TK_FIELD(g_tkIter, TkFieldKind), opcode;
         if (kind == '+') opcode = Add;
         else if (kind == '-') opcode = Sub;
         else break;
@@ -563,12 +587,12 @@ int add_expr() {
         int rhs = mul_expr();
         if (IS_PTR(data_type) && IS_PTR(rhs)) {
             if (data_type != rhs) {
-                COMPILE_ERROR("error:%d: type mismatch", GET_TK_FIELD(g_tkIter, TokenLine));
+                COMPILE_ERROR("error:%d: type mismatch", GET_TK_FIELD(g_tkIter, TkFieldLine));
             }
             if (data_type != CHAR_PTR) {
                 panic("TODO: handle subtraction other than char* - char*");
             }
-            data_type = Int;
+            data_type = KW_int;
         }
         POP(EBX);
         if (IS_PTR(data_type) && data_type != CHAR_PTR) { MUL(EAX, EAX, IMME, 4); }
@@ -581,8 +605,8 @@ int add_expr() {
 int shift_expr() {
     int data_type = add_expr();
     while (1) {
-        int kind = GET_TK_FIELD(g_tkIter, TokenKind);
-        if (kind != LShift && kind != RShift) break;
+        int kind = GET_TK_FIELD(g_tkIter, TkFieldKind);
+        if (kind != TK_LSHIFT && kind != TK_RSHIFT) break;
         ++g_tkIter;
         PUSH(EAX, 0);
         add_expr();
@@ -596,14 +620,14 @@ int shift_expr() {
 int relation_expr() {
     int data_type = shift_expr();
     while (1) {
-        int kind = GET_TK_FIELD(g_tkIter, TokenKind), opcode;
-        if (kind == TkNeq) opcode = Neq;
-        else if (kind == TkEq) opcode = Eq;
+        int kind = GET_TK_FIELD(g_tkIter, TkFieldKind), opcode;
+        if (kind == TK_NE) opcode = Neq;
+        else if (kind == TK_EQ) opcode = Eq;
         else if (kind == '<') opcode = Lt;
         else if (kind == '>') opcode = Gt;
-        else if (kind == TkGe) opcode = Ge;
+        else if (kind == TK_GE) opcode = Ge;
         else if (kind == '<') opcode = Lt;
-        else if (kind == TkLe) opcode = Le;
+        else if (kind == TK_LE) opcode = Le;
         else break;
         ++g_tkIter;
         PUSH(EAX, 0);
@@ -617,7 +641,7 @@ int relation_expr() {
 int bit_expr() {
     int data_type = relation_expr();
     while (1) {
-        int kind = GET_TK_FIELD(g_tkIter, TokenKind), opcode;
+        int kind = GET_TK_FIELD(g_tkIter, TkFieldKind), opcode;
         if (kind == '&') opcode = And;
         else if (kind == '|') opcode = Or;
         else break;
@@ -633,9 +657,9 @@ int bit_expr() {
 int logical_expr() {
     int data_type = bit_expr();
     while (1) {
-        int kind = GET_TK_FIELD(g_tkIter, TokenKind), opcode;
-        if (kind == TkAnd) opcode = Jz;
-        else if (kind == TkOr) opcode = Jnz;
+        int kind = GET_TK_FIELD(g_tkIter, TkFieldKind), opcode;
+        if (kind == TK_AND) opcode = Jz;
+        else if (kind == TK_OR) opcode = Jnz;
         else break;
 
         ++g_tkIter;
@@ -652,17 +676,17 @@ int logical_expr() {
 int assign_expr() {
     int data_type = logical_expr();
     while (1) {
-        int kind = GET_TK_FIELD(g_tkIter, TokenKind);
+        int kind = GET_TK_FIELD(g_tkIter, TkFieldKind);
         if (kind == '=') {
             ++g_tkIter;
             PUSH(EDX, 0);
             logical_expr();
             POP(EDX);
-            instruction(OP(Save, EDX, EAX, 0), data_type == Char ? 1 : 4);
+            instruction(OP(Save, EDX, EAX, 0), data_type == KW_char ? 1 : 4);
             continue;
         }
 
-        if (kind == TkAddTo) {
+        if (kind == TK_ADD_ASSIGN) {
             ++g_tkIter;
             PUSH(EDX, 0);
             relation_expr();
@@ -674,7 +698,7 @@ int assign_expr() {
             continue;
         }
 
-        if (kind == TkSubFrom) {
+        if (kind == TK_SUB_ASSIGN) {
             ++g_tkIter;
             PUSH(EDX, 0);
             relation_expr();
@@ -708,7 +732,7 @@ int assign_expr() {
 
 int expr() {
     int type = assign_expr();
-    while (GET_TK_FIELD(g_tkIter, TokenKind) == ',') {
+    while (GET_TK_FIELD(g_tkIter, TkFieldKind) == ',') {
         g_tkIter += 1;
         type = assign_expr();
     }
@@ -716,9 +740,9 @@ int expr() {
 }
 
 void stmt() {
-    int kind = GET_TK_FIELD(g_tkIter, TokenKind);
-    if (kind == Return) {
-        if (GET_TK_FIELD(++g_tkIter, TokenKind) != ';') { assign_expr(); }
+    int kind = GET_TK_FIELD(g_tkIter, TkFieldKind);
+    if (kind == KW_return) {
+        if (GET_TK_FIELD(++g_tkIter, TkFieldKind) != ';') { assign_expr(); }
         MOV(ESP, EBP, 0);
         POP(EBP);
         instruction(Ret, 0);
@@ -726,7 +750,7 @@ void stmt() {
         return;
     }
 
-    if (kind == If) {
+    if (kind == KW_if) {
         //     eax == 0; goto L1 |     eax == 0; goto L1
         //     ...               |     ...
         //     goto L2           | L1: ...
@@ -738,7 +762,7 @@ void stmt() {
         instruction(Jz, 0);
         stmt();
 
-        if (GET_TK_FIELD(g_tkIter, TokenKind) != Else) {
+        if (GET_TK_FIELD(g_tkIter, TkFieldKind) != KW_else) {
             OP_ATTRIB(goto_L1, Imme) = g_opCnt;
             return;
         }
@@ -752,7 +776,7 @@ void stmt() {
         return;
     }
 
-    if (kind == While) {
+    if (kind == KW_while) {
         // CONT: ...
         //       eax == 0; goto BREAK
         //       ...
@@ -776,14 +800,14 @@ void stmt() {
         return;
     }
 
-    if (kind == Break) {
+    if (kind == KW_break) {
         ++g_tkIter;
         instruction(_BreakStub, 0);
         expect(';');
         return;
     }
 
-    if (kind == Cont) {
+    if (kind == KW_continue) {
         ++g_tkIter;
         instruction(_ContStub, 0);
         expect(';');
@@ -794,8 +818,8 @@ void stmt() {
         enter_scope();
         ++g_tkIter;
         int restore = 0;
-        while (GET_TK_FIELD(g_tkIter, TokenKind) != '}') {
-            kind = GET_TK_FIELD(g_tkIter, TokenKind);
+        while (GET_TK_FIELD(g_tkIter, TkFieldKind) != '}') {
+            kind = GET_TK_FIELD(g_tkIter, TkFieldKind);
             if (IS_TYPE(kind)) {
                 ++g_tkIter;
                 int base_type = kind, varNum = 0;
@@ -805,8 +829,8 @@ void stmt() {
                     }
 
                     int ptr = 0;
-                    while (GET_TK_FIELD(g_tkIter, TokenKind) == '*') { ptr = (ptr << 8) | 0xFF; ++g_tkIter; }
-                    int id = expect(Id), prev = g_symCnt - 1;
+                    while (GET_TK_FIELD(g_tkIter, TkFieldKind) == '*') { ptr = (ptr << 8) | 0xFF; ++g_tkIter; }
+                    int id = expect(TK_IDENT), prev = g_symCnt - 1;
                     SYM_ATTRIB(g_symCnt, Address) = 4;
 
                     if (prev >= 0 && SYM_ATTRIB(prev, Storage) == Local) {
@@ -819,7 +843,7 @@ void stmt() {
                     SYM_ATTRIB(g_symCnt, DType) = (ptr << 16) | base_type;
 
                     SUB(ESP, ESP, IMME, 4);
-                    if (GET_TK_FIELD(g_tkIter, TokenKind) == '=') {
+                    if (GET_TK_FIELD(g_tkIter, TkFieldKind) == '=') {
                         ++g_tkIter;
                         assign_expr();
                         SUB(EDX, EBP, IMME, SYM_ATTRIB(g_symCnt, Address));
@@ -827,7 +851,7 @@ void stmt() {
                     }
 
                     ++restore, ++varNum, ++g_symCnt;
-                    if (GET_TK_FIELD(g_tkIter, TokenKind) == ';') { break; }
+                    if (GET_TK_FIELD(g_tkIter, TkFieldKind) == ';') { break; }
                 }
 
                 ++g_tkIter;
@@ -854,27 +878,27 @@ void stmt() {
 
 // an object could be a global variable, an enum or a function
 void obj() {
-    int kind = GET_TK_FIELD(g_tkIter, TokenKind);
-    if (kind == Enum) {
+    int kind = GET_TK_FIELD(g_tkIter, TkFieldKind);
+    if (kind == KW_enum) {
         ++g_tkIter;
         expect('{');
         int val = 0;
-        while (GET_TK_FIELD(g_tkIter, TokenKind) != '}') {
-            int idx = expect(Id);
+        while (GET_TK_FIELD(g_tkIter, TkFieldKind) != '}') {
+            int idx = expect(TK_IDENT);
             SYM_ATTRIB(g_symCnt, TkIdx) = idx;
             SYM_ATTRIB(g_symCnt, Storage) = Const;
-            SYM_ATTRIB(g_symCnt, DType) = Int;
+            SYM_ATTRIB(g_symCnt, DType) = KW_int;
             SYM_ATTRIB(g_symCnt, Scope) = g_scopes[g_scopeCnt - 1];
 
-            if (GET_TK_FIELD(g_tkIter, TokenKind) == '=') {
+            if (GET_TK_FIELD(g_tkIter, TkFieldKind) == '=') {
                 ++g_tkIter;
-                idx = expect(CInt);
-                val = GET_TK_FIELD(idx, TokenValue);
+                idx = expect(TK_INT);
+                val = GET_TK_FIELD(idx, TkFieldValue);
             }
 
             SYM_ATTRIB(g_symCnt++, Address) = val++;
 
-            if (GET_TK_FIELD(g_tkIter, TokenKind) == '}') { break; }
+            if (GET_TK_FIELD(g_tkIter, TkFieldKind) == '}') { break; }
             expect(',');
         }
         ++g_tkIter;
@@ -882,24 +906,24 @@ void obj() {
         return;
     }
 
-    int ln = GET_TK_FIELD(g_tkIter, TokenLine);
-    int start = GET_TK_FIELD(g_tkIter, TokenBegin);
-    int end = GET_TK_FIELD(g_tkIter++, TokenEnd);
+    int ln = GET_TK_FIELD(g_tkIter, TkFieldLine);
+    int start = GET_TK_FIELD(g_tkIter, TkFieldBegin);
+    int end = GET_TK_FIELD(g_tkIter++, TkFieldEnd);
     if (!IS_TYPE(kind)) {
         COMPILE_ERROR("error:%d: unexpected token '%.*s'\n", ln, end - start, start);
     }
 
-    while (GET_TK_FIELD(g_tkIter, TokenKind) != ';') {
+    while (GET_TK_FIELD(g_tkIter, TkFieldKind) != ';') {
         int data_type = kind, ptr = 0;
-        while (GET_TK_FIELD(g_tkIter, TokenKind) == '*') {
+        while (GET_TK_FIELD(g_tkIter, TkFieldKind) == '*') {
             ptr = (ptr << 8) | 0xFF;
             ++g_tkIter;
         }
         data_type = (ptr << 16) | data_type;
 
-        int id = expect(Id);
+        int id = expect(TK_IDENT);
 
-        if (GET_TK_FIELD(g_tkIter, TokenKind) != '(') {
+        if (GET_TK_FIELD(g_tkIter, TkFieldKind) != '(') {
             SYM_ATTRIB(g_symCnt, Storage) = Global;
             SYM_ATTRIB(g_symCnt, TkIdx) = id;
             SYM_ATTRIB(g_symCnt, Scope) = g_scopes[g_scopeCnt - 1];
@@ -907,11 +931,11 @@ void obj() {
             *((int*)g_bss) = 0;
             SYM_ATTRIB(g_symCnt++, Address) = g_bss;
             g_bss += 4;
-            if (GET_TK_FIELD(g_tkIter, TokenKind) != ';') { expect(','); }
+            if (GET_TK_FIELD(g_tkIter, TkFieldKind) != ';') { expect(','); }
             continue;
         }
 
-        if (streq("main", GET_TK_FIELD(id, TokenBegin), 4)) {
+        if (streq("main", GET_TK_FIELD(id, TkFieldBegin), 4)) {
             g_entry = g_opCnt;
         } else {
             SYM_ATTRIB(g_symCnt, Storage) = Func;
@@ -924,13 +948,13 @@ void obj() {
         enter_scope();
         expect('(');
         int argCnt = 0, i = 1;
-        while (GET_TK_FIELD(g_tkIter, TokenKind) != ')') {
+        while (GET_TK_FIELD(g_tkIter, TkFieldKind) != ')') {
             if (argCnt > 0) { expect(','); }
             int data_type = expect_type();
             int ptr = 0;
-            while (GET_TK_FIELD(g_tkIter, TokenKind) == '*') { ptr = (ptr << 8) | 0xFF; ++g_tkIter; }
+            while (GET_TK_FIELD(g_tkIter, TkFieldKind) == '*') { ptr = (ptr << 8) | 0xFF; ++g_tkIter; }
             data_type = (ptr << 16) | data_type;
-            SYM_ATTRIB(g_symCnt, TkIdx) = expect(Id);
+            SYM_ATTRIB(g_symCnt, TkIdx) = expect(TK_IDENT);
             SYM_ATTRIB(g_symCnt, Scope) = g_scopes[g_scopeCnt - 1];
             SYM_ATTRIB(g_symCnt, DType) = data_type;
             SYM_ATTRIB(g_symCnt++, Storage) = Param;
@@ -963,16 +987,16 @@ void gen(int argc, char** argv) {
     int i = 0;
     while (i < g_callCnt) {
         int idx = CALL_ATTRIB(i, TkIdx);
-        int start = GET_TK_FIELD(idx, TokenBegin);
-        int end = GET_TK_FIELD(idx, TokenEnd);
-        int ln = GET_TK_FIELD(idx, TokenLine);
+        int start = GET_TK_FIELD(idx, TkFieldBegin);
+        int end = GET_TK_FIELD(idx, TkFieldEnd);
+        int ln = GET_TK_FIELD(idx, TkFieldLine);
         int len = end - start;
 
         int found = 0, j = 0;
         while (j < g_symCnt) {
             if (SYM_ATTRIB(j, Storage) == Func) {
                 int funcIdx = SYM_ATTRIB(j, TkIdx);
-                if (streq(start, GET_TK_FIELD(funcIdx, TokenBegin), len)) {
+                if (streq(start, GET_TK_FIELD(funcIdx, TkFieldBegin), len)) {
                     found = 1;
                     /// NOTE: potential error here?
                     OP_ATTRIB(CALL_ATTRIB(i, InsIdx), Imme) = SYM_ATTRIB(j, Address);
@@ -1051,9 +1075,9 @@ void dump_code() {
             printf("  or %.*s, %.*s, %.*s\n", REG2STR(dest), REG2STR(src1), REG2STR(src2));
         } else if (op == Not) {
             printf("  not %.*s\n", REG2STR(dest));
-        } else if (op == LShift) {
+        } else if (op == TK_LSHIFT) {
             printf("  lshift %.*s, %.*s, %.*s\n", REG2STR(dest), REG2STR(src1), REG2STR(src2));
-        } else if (op == RShift) {
+        } else if (op == TK_RSHIFT) {
             printf("  rshift %.*s, %.*s, %.*s\n", REG2STR(dest), REG2STR(src1), REG2STR(src2));
         } else if (op == Push) {
             if (src2 == IMME) printf("  push %d(0x%08X)\n", imme, imme);
@@ -1067,8 +1091,8 @@ void dump_code() {
         } else if (op == Jump || op == Jz || op == Jnz || op == Call) {
             char* opstr = op == Jump ? "jmp" : op == Jz ? "jz" : op == Jnz ? "jnz" : "call";
             printf("  %s %d\n", opstr, imme);
-        } else if (op == Printf || op == Fopen || op == Fgetc || op == Malloc || op == Exit) {
-            char* opstr = op == Printf ? "printf" : op == Fopen ? "fopen" : op == Fgetc ? "fgetc" : op == Malloc ? "malloc" : "exit";
+        } else if (op == KW_printf || op == KW_fopen || op == KW_fgetc || op == KW_calloc || op == KW_exit) {
+            char* opstr = op == KW_printf ? "printf" : op == KW_fopen ? "fopen" : op == KW_fgetc ? "fgetc" : op == KW_calloc ? "calloc" : "exit";
             printf("  %s\n", opstr);
         } else {
             panic("invalid op code");
@@ -1079,16 +1103,17 @@ void dump_code() {
 }
 
 int main(int argc, char **argv) {
-    if (argc < 2) {
-        printf("Usage: %s file [args...]\n", *argv);
-        return 1;
-    }
+    // @TODO: better error handling
+	if (argc == 1) {
+		printf("%s: fatal error: no input files\n    compilation terminated.", *argv);
+		return 1;
+	}
 
-    void* fp = fopen(argv[1], "r");
-    if (!fp) {
-        printf("file '%s' does not exist\n", argv[1]);
-        return 1;
-    }
+	void* fp = fopen(argv[1], "r");
+	if (!fp) {
+		printf("%s: fatal error: %s : No such file or directory\n    compilation terminated.", *argv, *(argv + 1));
+		return 1;
+	}
 
     g_reserved = 2 * CHUNK_SIZE * argc;
     g_ram = calloc(g_reserved, 1); // @TODO: support calloc
@@ -1096,7 +1121,7 @@ int main(int argc, char **argv) {
     // memory layout
     // | instructions | global variables | ... script memory ... | stack |
     int src_reserved = 1 << 18;
-    int tk_reserved = 4 * _TokenEnumCount * (src_reserved >> 2);
+    int tk_reserved = 4 * _TkFieldCount * (src_reserved >> 2);
     int sym_reserved = 4 * SymSize * (tk_reserved >> 8);
     int opcode_reserved = 4 * OpSize * (src_reserved >> 3);
     int scope_reserved = 4 * MAX_SCOPE;
@@ -1183,8 +1208,8 @@ int main(int argc, char **argv) {
         else if (op == And) { g_regs[dest] = g_regs[src1] & value; }
         else if (op == Or) { g_regs[dest] = g_regs[src1] | value; }
         else if (op == Not) { g_regs[dest] = !g_regs[dest]; }
-        else if (op == LShift) { g_regs[dest] = g_regs[src1] << value; }
-        else if (op == RShift) { g_regs[dest] = g_regs[src1] >> value; }
+        else if (op == TK_LSHIFT) { g_regs[dest] = g_regs[src1] << value; }
+        else if (op == TK_RSHIFT) { g_regs[dest] = g_regs[src1] >> value; }
         else if (op == Save) {
             if (imme == 4) *((int*)g_regs[dest]) = g_regs[src1];
             else *((char*)g_regs[dest]) = g_regs[src1];
@@ -1193,18 +1218,18 @@ int main(int argc, char **argv) {
             if (imme == 4) g_regs[dest] = *((int*)g_regs[src1]);
             else g_regs[dest] = *((char*)g_regs[src1]);
         }
-        else if (op == Printf) {
+        else if (op == KW_printf) {
             int* p = g_regs[ESP];
             printf((char*)(p[7]), p[6], p[5], p[4], p[3], p[2], p[1], p[0]);
-        } else if (op == Fgetc) {
+        } else if (op == KW_fgetc) {
             int* p = g_regs[ESP];
             g_regs[EAX] = fgetc((void*)(p[0]));
-        } else if (op == Fopen) {
+        } else if (op == KW_fopen) {
             int* p = g_regs[ESP];
             g_regs[EAX] = fopen((char*)(p[1]), (char*)(p[0]));
-        } else if (op == Malloc) {
-            g_regs[EAX] = g_ram + CHUNK_SIZE;
-        } else if (op == Exit) {
+        } else if (op == KW_calloc) {
+            g_regs[EAX] = g_ram + CHUNK_SIZE; // @HACK: not really allocating desired amount of memory
+        } else if (op == KW_exit) {
             g_regs[EAX] = *((int*)g_regs[ESP]);
             break;
         } else { panic("Invalid op code"); }

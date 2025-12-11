@@ -4,18 +4,19 @@
 ```shell
 $ cmake -S . -B build -A Win32
 $ cmake --build build --config Debug
-# then copy c.c.exe to root
 ```
 
-## Shell
-
+## Self Hosting
 ```shell
-$ sh build.sh
-$ ./c hello.c
-$ ./c c.c hello.c
-$ ./c c.c c.c hello.c
-$ ./c c.c c.c c.c hello.c
-$ sh run-test.sh
+$ py -u scripts/preprocess.py # This preprocess the source code, because c.c doesn't have preprocessor
+$ ./c hello.c                 # hello world
+$ ./c c.c c.c hello.c         # self hosting
+```
+
+## Testing
+```shell
+$ # copy c.c.exe to root dir
+$ py -u scripts/run_tests.py
 ```
 
 This project is a tiny C interpreter inspired by [c4](https://github.com/rswier/c4).
