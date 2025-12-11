@@ -4,6 +4,7 @@ from pathlib import Path
 
 from utils import run_command
 
+# @TODO: refactor error handling and logging
 def testcase(c_file: Path) -> bool:
     """
     Run a single test case for the given C file.
