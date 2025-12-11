@@ -1102,16 +1102,18 @@ void dump_code() {
     return;
 }
 
+#define FATAL_ERROR(fmt, ...) { printf("c.c: \033[31mfatal error\033[0m: " fmt "\ncompilation terminated.\n", ##__VA_ARGS__); exit(1); }
+
 int main(int argc, char **argv) {
     // @TODO: better error handling
 	if (argc == 1) {
-		printf("%s: fatal error: no input files\n    compilation terminated.", *argv);
+        FATAL_ERROR("no input files");
 		return 1;
 	}
 
 	void* fp = fopen(argv[1], "r");
 	if (!fp) {
-		printf("%s: fatal error: %s : No such file or directory\n    compilation terminated.", *argv, *(argv + 1));
+		FATAL_ERROR("%s: No such file or directory", *(argv + 1));
 		return 1;
 	}
 
