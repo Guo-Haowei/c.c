@@ -1,3 +1,4 @@
+import sys
 import subprocess
 from pathlib import Path
 
@@ -22,6 +23,7 @@ class Log:
 
     @staticmethod
     def error(msg: str):
+        # @TODO: throw exception instead of exiting?
         print(f'{Log.COLOR_RED}[ERR ] {msg}{Log.COLOR_RESET}', file=sys.stderr)
 
 def run_command(args, stdout_path=None):
