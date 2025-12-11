@@ -18,23 +18,23 @@ def testcase(c_file: Path) -> bool:
         Log.error('ERROR: gcc compilation failed.')
         return False
 
-    # 2. Run c.c.exe and capture output -> name.actual
+    # 2. Run a.exe and capture output -> name.expect
     actual_path = Path(f'{name}.actual')
-    test_c_path = Path('test') / f'{name}.c'
-    ret = run_command([str(Path('c.c.exe')), str(c_file), str(test_c_path)], stdout_path=actual_path)
-
-    if ret != 0:
-        Log.error(f'c.c failed for {c_file}')
-        return False
-
-    # 3. Run a.exe and capture output -> name.expect
     expect_path = Path(f'{name}.expect')
+
     ret = run_command(
-        [str(Path('a.exe')), str(test_c_path)],
+        [str(Path('a.exe')), str(c_file)],
         stdout_path=expect_path,
     )
     if ret != 0:
         Log.error(f'a.exe failed for {c_file}')
+        return False
+
+    # 3. Run c.c.exe and capture output -> name.actual
+    ret = run_command([str(Path('c.c.exe')), str(c_file)], stdout_path=actual_path)
+
+    if ret != 0:
+        Log.error(f'c.c failed for {c_file}')
         return False
 
     # 4. Compare outputs

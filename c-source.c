@@ -1103,16 +1103,17 @@ void dump_code() {
 }
 
 int main(int argc, char **argv) {
-    if (argc < 2) {
-        printf("Usage: %s file [args...]\n", *argv);
-        return 1;
-    }
+    // @TODO: better error handling
+	if (argc == 1) {
+		printf("%s: fatal error: no input files\n    compilation terminated.", *argv);
+		return 1;
+	}
 
-    void* fp = fopen(argv[1], "r");
-    if (!fp) {
-        printf("file '%s' does not exist\n", argv[1]);
-        return 1;
-    }
+	void* fp = fopen(argv[1], "r");
+	if (!fp) {
+		printf("%s: fatal error: %s : No such file or directory\n    compilation terminated.", *argv, *(argv + 1));
+		return 1;
+	}
 
     g_reserved = 2 * CHUNK_SIZE * argc;
     g_ram = calloc(g_reserved, 1); // @TODO: support calloc
