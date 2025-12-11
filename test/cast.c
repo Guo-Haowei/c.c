@@ -12,7 +12,7 @@ int main() {
     p[i] = 0;
     printf("%s\n", p);
 
-    int* ip = p;
+    int* ip = (int*)p;
     i = 0;
     while (i <= 3) {
         printf("%d\n", ip[i]);
@@ -22,6 +22,6 @@ int main() {
     printf("%d\n", *((int*)p));
     printf("%d\n", *(((int*)p) + 1));
     printf("%d\n", *(((int*)p) + 2));
- 
+
     return 0;
 }

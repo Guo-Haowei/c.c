@@ -1,5 +1,10 @@
 #include <stdio.h>
 
+int fib(int i) {
+    if (i < 2) return i;
+    return fib(i - 2) + fib(i - 1);
+}
+
 int main() {
     printf("%d\n", fib(0));
     printf("%d\n", fib(1));
@@ -15,9 +20,4 @@ int main() {
     printf("%d\n", fib(11));
     printf("%d\n", fib(12));
     return 0;
-}
-
-int fib(int i) {
-    if (i < 2) return i;
-    return fib(i - 2) + fib(i - 1);
 }

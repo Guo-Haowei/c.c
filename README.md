@@ -1,8 +1,10 @@
 # c.c
 
-## CMake
+## Build
 ```shell
 $ cmake -S . -B build -A Win32
+$ cmake --build build --config Debug
+# then copy c.c.exe to root
 ```
 
 ## Shell
