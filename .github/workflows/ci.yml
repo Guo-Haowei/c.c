@@ -31,4 +31,4 @@ jobs:
         with:
           name: cc
       - name: Run Tests
-        run: ./c.c.exe hello.c
+        run: python -u .\run_tests.py
