@@ -14,10 +14,11 @@
 #define IS_LETTER(C) ((C >= 'a' && C <= 'z') || (C >= 'A' && C <= 'Z'))
 #define IS_DIGIT(C) (C >= '0' && C <= '9')
 #define IS_HEX(C) (IS_DIGIT(C) || (C >= 'A' && C <= 'F'))
-#define IS_WHITESPACE(C) (C == ' ' || C == 9 || C == 10 || C == 13)
+#define IS_WHITESPACE(C) (C == ' ' || C == '\t' || C == '\n' || C == '\r')
 #define IS_PUNCT(P, A, B) (*P == A && P[1] == B)
 #define IS_TYPE(KIND) (KIND >= KW_int && KIND <= KW_void)
 #define ALIGN(x) ((x + 3) & -4)
+// @TODO: refactor error
 #define COMPILE_ERROR(...) { printf(__VA_ARGS__); exit(1); }
 #define PUSH(REG, VAL) instruction(Push | (REG << 24), VAL)
 #define POP(REG) instruction(Pop | (REG << 8), 0)
@@ -37,10 +38,10 @@
 #define CALL_ATTRIB(IDX, ATTRIB) g_calls[((IDX) * CallSize) + ATTRIB]
 #define OP(op, dest, src1, src2) ((op) | (dest << 8) | (src1 << 16) | (src2 << 24))
 
-#define MAX_PRINF_ARGS 8
+#define MAX_PRINF_ARGS (8)
 #define CHUNK_SIZE (1 << 27)
-#define MAX_SCOPE 128
-#define MAX_CALLS 1024
+#define MAX_SCOPE (128)
+#define MAX_CALLS (1024)
 
 enum { Undefined, Global, Param, Local, Func, Const };
 enum { EAX = 1, EBX, ECX, EDX, ESP, EBP, IMME };
@@ -70,8 +71,7 @@ int strlen(char* p) {
 }
 #pragma endregion utils
 
-#pragma region token
-
+//---------------------------------- TOKEN  ----------------------------------//
 enum {
 	_TK_START = 128, // 0-127 is reserved for ascii
 	TK_INT,          // int
@@ -111,6 +111,7 @@ enum {
 };
 
 // @TODO: implement struct. Use enum and array to mimic array of struct for now
+#define GET_TK_FIELD(IDX, ATTRIB) (g_token_buffer[((IDX) * _TkFieldCount) + ATTRIB])
 enum {
 	TkFieldKind,
 	TkFieldValue, // store the value of token if char or int
@@ -121,10 +122,7 @@ enum {
 	_TkFieldCount,
 };
 
-int* g_token_buffer, // global int array to hold token information
-     g_token_idx;    // global index of current token
-
-#define GET_TK_FIELD(IDX, ATTRIB) (g_token_buffer[((IDX) * _TkFieldCount) + ATTRIB])
+int* g_token_buffer; // global int array to hold token information
 
 void check_if_token_keyword(int token_idx) {
 	char* keywords = "int\0     char\0    void\0    break\0   continue\0"
@@ -132,8 +130,8 @@ void check_if_token_keyword(int token_idx) {
 		             "printf\0  fopen\0   fgetc\0   calloc\0  memset\0  "
 		             "exit\0    ";
 
-	int start = GET_TK_FIELD(token_idx, TkFieldBegin);
-	int token_len = GET_TK_FIELD(token_idx, TkFieldEnd) - start;
+	char* start = GET_TK_FIELD(token_idx, TkFieldBegin);
+	int token_len = (char*)GET_TK_FIELD(token_idx, TkFieldEnd) - start;
 
 	int idx = 0;
 	while (idx < (_KW_END - KW_int)) {
@@ -148,12 +146,8 @@ void check_if_token_keyword(int token_idx) {
     return;
 }
 
-#pragma endregion token
-
 // @TODO: refactor
-
 char *g_ram, *g_src;
-
 int g_reserved, g_bss,
     g_tkIter,
     *g_syms, g_symCnt,
@@ -163,114 +157,98 @@ int g_reserved, g_bss,
     g_scopeId, *g_scopes, g_scopeCnt,
     *g_calls, g_callCnt;
 
-void lex() {
+//---------------------------------- PARSER ----------------------------------//
+int parse_escape_sequence(int letter, int ln) {
+	if (letter == '0') return '\0';
+	if (letter == 'n') return '\n';
+	if (letter == 'r') return '\r';
+	if (letter == 't') return '\t';
+	if (letter == '\\') return '\\';
+	if (letter == '\'') return '\'';
+	if (letter == '"') return '"';
+
+	COMPILE_ERROR("error:%d: unknown escape sequence '\\%c'\n", ln, letter);
+	return 0;
+}
+
+int lex(char* p) {
+    int token_idx = 0;
     int ln = 1;
-    char *p = g_src;
 	while (*p) {
 		if (*p == '#' || (*p == '/' && p[1] == '/')) { // handle '#' and comment '//'
-			while (*p && *p != 10) ++p;
+			while (*p && *p != '\n') ++p;
 		} else if (IS_WHITESPACE(*p)) { // handle whitespace
-			ln += (*p == 10); ++p;
+			ln += (*p == '\n'); ++p;
 		} else {
-            GET_TK_FIELD(g_token_idx, TkFieldLine) = ln;
-            GET_TK_FIELD(g_token_idx, TkFieldBegin) = p;
+            GET_TK_FIELD(token_idx, TkFieldLine) = ln;
+            GET_TK_FIELD(token_idx, TkFieldBegin) = (int)p;
 
             if (IS_LETTER(*p) || *p == '_') { // handle token or keyword
-                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_IDENT;
+                GET_TK_FIELD(token_idx, TkFieldKind) = TK_IDENT;
                 ++p;
                 while (IS_LETTER(*p) || IS_DIGIT(*p) || *p == '_') {
                     ++p;
                 }
-                GET_TK_FIELD(g_token_idx, TkFieldEnd) = p;
-                check_if_token_keyword(g_token_idx);
-                g_token_idx += 1;
+                GET_TK_FIELD(token_idx, TkFieldEnd) = (int)p;
+                check_if_token_keyword(token_idx);
+                token_idx += 1;
             } else if (*p == '0' && p[1] == 'x') { // handle hex number
-                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_INT;
+                GET_TK_FIELD(token_idx, TkFieldKind) = TK_INT;
                 int result = 0;
                 p += 2; while(IS_HEX(*p)) {
                     result = (result << 4) + ((*p < 'A') ? (*p - '0') : (*p - 55));
                     ++p;
                 }
-                GET_TK_FIELD(g_token_idx, TkFieldValue) = result;
-                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = p;
+                GET_TK_FIELD(token_idx, TkFieldValue) = result;
+                GET_TK_FIELD(token_idx++, TkFieldEnd) = p;
             } else if (IS_DIGIT(*p)) { // handle decimal number
-                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_INT;
+                GET_TK_FIELD(token_idx, TkFieldKind) = TK_INT;
                 int result = 0;
                 while (IS_DIGIT(*p)) { result = result * 10 + (*p - '0'); ++p; }
-                GET_TK_FIELD(g_token_idx, TkFieldValue) = result;
-                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = p;
+                GET_TK_FIELD(token_idx, TkFieldValue) = result;
+                GET_TK_FIELD(token_idx++, TkFieldEnd) = p;
             } else if (*p == '"') { // handle string
-                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_STRING;
+                GET_TK_FIELD(token_idx, TkFieldKind) = TK_STRING;
                 ++p; while (*p != '"') { ++p; };
-                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = ++p;
-            } else if (*p == 39) { // ascii '''
-                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_CHAR;
-                GET_TK_FIELD(g_token_idx, TkFieldValue) = p[1];
-                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = (p += 3);
+                GET_TK_FIELD(token_idx++, TkFieldEnd) = ++p;
+            } else if (*p == '\'') {
+                // @TODO: handle escape
+                GET_TK_FIELD(token_idx, TkFieldKind) = TK_CHAR;
+                int v = *(++p); // skip opening '
+                if (v == '\\') {
+                    v = parse_escape_sequence(*(++p), ln);
+                }
+                GET_TK_FIELD(token_idx, TkFieldValue) = v;
+                GET_TK_FIELD(token_idx++, TkFieldEnd) = (p += 2); // skip char and closing '
             } else {
-                GET_TK_FIELD(g_token_idx, TkFieldKind) = *p;
+                GET_TK_FIELD(token_idx, TkFieldKind) = *p;
 
-                if (IS_PUNCT(p, '=', '=')) { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_EQ; ++p; }
-                else if (IS_PUNCT(p, '!', '=')) { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_NE; ++p; }
-                else if (IS_PUNCT(p, '&', '&')) { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_AND; ++p; }
-                else if (IS_PUNCT(p, '|', '|')) { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_OR; ++p; }
+                if (IS_PUNCT(p, '=', '=')) { GET_TK_FIELD(token_idx, TkFieldKind) = TK_EQ; ++p; }
+                else if (IS_PUNCT(p, '!', '=')) { GET_TK_FIELD(token_idx, TkFieldKind) = TK_NE; ++p; }
+                else if (IS_PUNCT(p, '&', '&')) { GET_TK_FIELD(token_idx, TkFieldKind) = TK_AND; ++p; }
+                else if (IS_PUNCT(p, '|', '|')) { GET_TK_FIELD(token_idx, TkFieldKind) = TK_OR; ++p; }
                 else if (*p == '+') {
-                    if (p[1] == '+') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_INC; ++p; }
-                    else if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_ADD_ASSIGN; ++p; }
+                    if (p[1] == '+') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_INC; ++p; }
+                    else if (p[1] == '=') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_ADD_ASSIGN; ++p; }
                 } else if (*p == '-') {
-                    if (p[1] == '-') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_DEC; ++p; }
-                    else if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_SUB_ASSIGN; ++p; }
+                    if (p[1] == '-') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_DEC; ++p; }
+                    else if (p[1] == '=') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_SUB_ASSIGN; ++p; }
                 } else if (*p == '>') {
-                    if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_GE; ++p; }
-                    else if (p[1] == '>') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_RSHIFT; ++p; }
+                    if (p[1] == '=') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_GE; ++p; }
+                    else if (p[1] == '>') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_RSHIFT; ++p; }
                 } else if (*p == '<') {
-                    if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_LE; ++p; }
-                    else if (p[1] == '<') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_LSHIFT; ++p; }
+                    if (p[1] == '=') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_LE; ++p; }
+                    else if (p[1] == '<') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_LSHIFT; ++p; }
                 }
 
-                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = ++p;
+                GET_TK_FIELD(token_idx++, TkFieldEnd) = ++p;
             }
         }
     }
-    return;
+    return token_idx;
 }
 
-// debug
-void dump_tokens() {
-    printf("-------- lex --------\n");
-    int indent = 0, i = 0, ln = 0;
-    while (i < g_token_idx) {
-        int tkln = GET_TK_FIELD(i, TkFieldLine);
-        int kind = GET_TK_FIELD(i, TkFieldKind);
-        int start = GET_TK_FIELD(i, TkFieldBegin);
-        int end = GET_TK_FIELD(i, TkFieldEnd);
-        int len = end - start;
-        if (kind == '{') { indent += 1; }
-        else if (kind == '}') { indent -= 1; }
-        if (ln != tkln) {
-            printf("\n%-3d:%.*s", tkln, indent * 4, "                                        ");
-            ln = tkln;
-        }
-        char* names = "Int   Char  Void  Break Cont  Else  Enum  If    "
-                      "Ret   While Print Fopen Fgetc CallocMemsetExit  ";
-        printf("%.*s", len, start);
-        if (kind >= KW_int) {
-            printf("{");
-            char *p = names + 6 * (kind - KW_int); int ii = 0;
-            while (ii < 6) {
-                if (*p == ' ') break;
-                printf("%c", *p);
-                ++ii; ++p;
-            }
-            printf("}");
-        }
-        printf(" ");
-        ++i;
-    }
-    printf("\n");
-    return;
-}
-
+//--------------------------------- CODEGEN ----------------------------------//
 void enter_scope() {
     if (g_scopeCnt >= MAX_SCOPE) {
         panic("scope overflow");
@@ -343,11 +321,8 @@ int primary_expr() {
             int i = 1;
             while (i < len) {
                 int c = start[i];
-                if (c == 92) { // '\'
-                    c = start[i += 1];
-                    if (c == 'n') { c = 10; }
-                    else if (c == '0') { c = 0; }
-                    else { COMPILE_ERROR("error:%d: unknown escape sequence '%c'\n", ln, c); }
+                if (c == '\\') {
+                    c = parse_escape_sequence(start[i += 1], ln);
                 }
                 *((char*)g_bss++) = c;
                 ++i;
@@ -977,10 +952,10 @@ void obj() {
     return;
 }
 
-void gen(int argc, char** argv) {
+void gen(int argc, char** argv, int token_count) {
     enter_scope();
 
-    while (g_tkIter < g_token_idx) {
+    while (g_tkIter < token_count) {
         obj();
     }
 
@@ -1102,16 +1077,18 @@ void dump_code() {
     return;
 }
 
+#define FATAL_ERROR(fmt, ...) { printf("c.c: \033[31mfatal error\033[0m: " fmt "\ncompilation terminated.\n", ##__VA_ARGS__); exit(1); }
+
 int main(int argc, char **argv) {
     // @TODO: better error handling
 	if (argc == 1) {
-		printf("%s: fatal error: no input files\n    compilation terminated.", *argv);
+        FATAL_ERROR("no input files");
 		return 1;
 	}
 
 	void* fp = fopen(argv[1], "r");
 	if (!fp) {
-		printf("%s: fatal error: %s : No such file or directory\n    compilation terminated.", *argv, *(argv + 1));
+		FATAL_ERROR("%s: No such file or directory", *(argv + 1));
 		return 1;
 	}
 
@@ -1140,10 +1117,10 @@ int main(int argc, char **argv) {
     g_src[src_len] = 0;
 
     // lexing
-    lex();
+    int token_count = lex(g_src);
 
     // code generation
-    gen(argc - 1, argv + 1);
+    gen(argc - 1, argv + 1, token_count);
 
     // run
     g_regs = g_ram + g_reserved - 4 * IMME;
