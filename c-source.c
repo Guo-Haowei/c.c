@@ -14,7 +14,7 @@
 #define IS_LETTER(C) ((C >= 'a' && C <= 'z') || (C >= 'A' && C <= 'Z'))
 #define IS_DIGIT(C) (C >= '0' && C <= '9')
 #define IS_HEX(C) (IS_DIGIT(C) || (C >= 'A' && C <= 'F'))
-#define IS_WHITESPACE(C) (C == ' ' || C == 9 || C == 10 || C == 13)
+#define IS_WHITESPACE(C) (C == ' ' || C == '\t' || C == '\n' || C == '\r')
 #define IS_PUNCT(P, A, B) (*P == A && P[1] == B)
 #define IS_TYPE(KIND) (KIND >= KW_int && KIND <= KW_void)
 #define ALIGN(x) ((x + 3) & -4)
@@ -38,10 +38,10 @@
 #define CALL_ATTRIB(IDX, ATTRIB) g_calls[((IDX) * CallSize) + ATTRIB]
 #define OP(op, dest, src1, src2) ((op) | (dest << 8) | (src1 << 16) | (src2 << 24))
 
-#define MAX_PRINF_ARGS 8
+#define MAX_PRINF_ARGS (8)
 #define CHUNK_SIZE (1 << 27)
-#define MAX_SCOPE 128
-#define MAX_CALLS 1024
+#define MAX_SCOPE (128)
+#define MAX_CALLS (1024)
 
 enum { Undefined, Global, Param, Local, Func, Const };
 enum { EAX = 1, EBX, ECX, EDX, ESP, EBP, IMME };
@@ -71,8 +71,7 @@ int strlen(char* p) {
 }
 #pragma endregion utils
 
-#pragma region token
-
+//---------------------------------- TOKEN  ----------------------------------//
 enum {
 	_TK_START = 128, // 0-127 is reserved for ascii
 	TK_INT,          // int
@@ -112,6 +111,7 @@ enum {
 };
 
 // @TODO: implement struct. Use enum and array to mimic array of struct for now
+#define GET_TK_FIELD(IDX, ATTRIB) (g_token_buffer[((IDX) * _TkFieldCount) + ATTRIB])
 enum {
 	TkFieldKind,
 	TkFieldValue, // store the value of token if char or int
@@ -124,8 +124,6 @@ enum {
 
 int* g_token_buffer, // global int array to hold token information
      g_token_idx;    // global index of current token
-
-#define GET_TK_FIELD(IDX, ATTRIB) (g_token_buffer[((IDX) * _TkFieldCount) + ATTRIB])
 
 void check_if_token_keyword(int token_idx) {
 	char* keywords = "int\0     char\0    void\0    break\0   continue\0"
@@ -149,12 +147,8 @@ void check_if_token_keyword(int token_idx) {
     return;
 }
 
-#pragma endregion token
-
 // @TODO: refactor
-
 char *g_ram, *g_src;
-
 int g_reserved, g_bss,
     g_tkIter,
     *g_syms, g_symCnt,
@@ -164,6 +158,7 @@ int g_reserved, g_bss,
     g_scopeId, *g_scopes, g_scopeCnt,
     *g_calls, g_callCnt;
 
+//---------------------------------- PARSER ----------------------------------//
 int parse_escape_sequence(int letter, int ln) {
 	if (letter == '0') return '\0';
 	if (letter == 'n') return '\n';
@@ -184,7 +179,7 @@ void lex() {
 		if (*p == '#' || (*p == '/' && p[1] == '/')) { // handle '#' and comment '//'
 			while (*p && *p != '\n') ++p;
 		} else if (IS_WHITESPACE(*p)) { // handle whitespace
-			ln += (*p == 10); ++p;
+			ln += (*p == '\n'); ++p;
 		} else {
             GET_TK_FIELD(g_token_idx, TkFieldLine) = ln;
             GET_TK_FIELD(g_token_idx, TkFieldBegin) = (int)p;
@@ -221,7 +216,7 @@ void lex() {
                 // @TODO: handle escape
                 GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_CHAR;
                 int v = *(++p); // skip opening '
-                if (v == 92) { // 92 is backslash, @TODO: fix it
+                if (v == '\\') {
                     v = parse_escape_sequence(*(++p), ln);
                 }
                 GET_TK_FIELD(g_token_idx, TkFieldValue) = v;
@@ -254,42 +249,7 @@ void lex() {
     return;
 }
 
-// debug
-void dump_tokens() {
-    printf("-------- lex --------\n");
-    int indent = 0, i = 0, ln = 0;
-    while (i < g_token_idx) {
-        int tkln = GET_TK_FIELD(i, TkFieldLine);
-        int kind = GET_TK_FIELD(i, TkFieldKind);
-        int start = GET_TK_FIELD(i, TkFieldBegin);
-        int end = GET_TK_FIELD(i, TkFieldEnd);
-        int len = end - start;
-        if (kind == '{') { indent += 1; }
-        else if (kind == '}') { indent -= 1; }
-        if (ln != tkln) {
-            printf("\n%-3d:%.*s", tkln, indent * 4, "                                        ");
-            ln = tkln;
-        }
-        char* names = "Int   Char  Void  Break Cont  Else  Enum  If    "
-                      "Ret   While Print Fopen Fgetc CallocMemsetExit  ";
-        printf("%.*s", len, start);
-        if (kind >= KW_int) {
-            printf("{");
-            char *p = names + 6 * (kind - KW_int); int ii = 0;
-            while (ii < 6) {
-                if (*p == ' ') break;
-                printf("%c", *p);
-                ++ii; ++p;
-            }
-            printf("}");
-        }
-        printf(" ");
-        ++i;
-    }
-    printf("\n");
-    return;
-}
-
+//--------------------------------- CODEGEN ----------------------------------//
 void enter_scope() {
     if (g_scopeCnt >= MAX_SCOPE) {
         panic("scope overflow");
