@@ -122,8 +122,7 @@ enum {
 	_TkFieldCount,
 };
 
-int* g_token_buffer, // global int array to hold token information
-     g_token_idx;    // global index of current token
+int* g_token_buffer; // global int array to hold token information
 
 void check_if_token_keyword(int token_idx) {
 	char* keywords = "int\0     char\0    void\0    break\0   continue\0"
@@ -172,81 +171,81 @@ int parse_escape_sequence(int letter, int ln) {
 	return 0;
 }
 
-void lex() {
+int lex(char* p) {
+    int token_idx = 0;
     int ln = 1;
-    char *p = g_src;
 	while (*p) {
 		if (*p == '#' || (*p == '/' && p[1] == '/')) { // handle '#' and comment '//'
 			while (*p && *p != '\n') ++p;
 		} else if (IS_WHITESPACE(*p)) { // handle whitespace
 			ln += (*p == '\n'); ++p;
 		} else {
-            GET_TK_FIELD(g_token_idx, TkFieldLine) = ln;
-            GET_TK_FIELD(g_token_idx, TkFieldBegin) = (int)p;
+            GET_TK_FIELD(token_idx, TkFieldLine) = ln;
+            GET_TK_FIELD(token_idx, TkFieldBegin) = (int)p;
 
             if (IS_LETTER(*p) || *p == '_') { // handle token or keyword
-                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_IDENT;
+                GET_TK_FIELD(token_idx, TkFieldKind) = TK_IDENT;
                 ++p;
                 while (IS_LETTER(*p) || IS_DIGIT(*p) || *p == '_') {
                     ++p;
                 }
-                GET_TK_FIELD(g_token_idx, TkFieldEnd) = (int)p;
-                check_if_token_keyword(g_token_idx);
-                g_token_idx += 1;
+                GET_TK_FIELD(token_idx, TkFieldEnd) = (int)p;
+                check_if_token_keyword(token_idx);
+                token_idx += 1;
             } else if (*p == '0' && p[1] == 'x') { // handle hex number
-                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_INT;
+                GET_TK_FIELD(token_idx, TkFieldKind) = TK_INT;
                 int result = 0;
                 p += 2; while(IS_HEX(*p)) {
                     result = (result << 4) + ((*p < 'A') ? (*p - '0') : (*p - 55));
                     ++p;
                 }
-                GET_TK_FIELD(g_token_idx, TkFieldValue) = result;
-                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = p;
+                GET_TK_FIELD(token_idx, TkFieldValue) = result;
+                GET_TK_FIELD(token_idx++, TkFieldEnd) = p;
             } else if (IS_DIGIT(*p)) { // handle decimal number
-                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_INT;
+                GET_TK_FIELD(token_idx, TkFieldKind) = TK_INT;
                 int result = 0;
                 while (IS_DIGIT(*p)) { result = result * 10 + (*p - '0'); ++p; }
-                GET_TK_FIELD(g_token_idx, TkFieldValue) = result;
-                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = p;
+                GET_TK_FIELD(token_idx, TkFieldValue) = result;
+                GET_TK_FIELD(token_idx++, TkFieldEnd) = p;
             } else if (*p == '"') { // handle string
-                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_STRING;
+                GET_TK_FIELD(token_idx, TkFieldKind) = TK_STRING;
                 ++p; while (*p != '"') { ++p; };
-                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = ++p;
+                GET_TK_FIELD(token_idx++, TkFieldEnd) = ++p;
             } else if (*p == '\'') {
                 // @TODO: handle escape
-                GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_CHAR;
+                GET_TK_FIELD(token_idx, TkFieldKind) = TK_CHAR;
                 int v = *(++p); // skip opening '
                 if (v == '\\') {
                     v = parse_escape_sequence(*(++p), ln);
                 }
-                GET_TK_FIELD(g_token_idx, TkFieldValue) = v;
-                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = (p += 2); // skip char and closing '
+                GET_TK_FIELD(token_idx, TkFieldValue) = v;
+                GET_TK_FIELD(token_idx++, TkFieldEnd) = (p += 2); // skip char and closing '
             } else {
-                GET_TK_FIELD(g_token_idx, TkFieldKind) = *p;
+                GET_TK_FIELD(token_idx, TkFieldKind) = *p;
 
-                if (IS_PUNCT(p, '=', '=')) { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_EQ; ++p; }
-                else if (IS_PUNCT(p, '!', '=')) { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_NE; ++p; }
-                else if (IS_PUNCT(p, '&', '&')) { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_AND; ++p; }
-                else if (IS_PUNCT(p, '|', '|')) { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_OR; ++p; }
+                if (IS_PUNCT(p, '=', '=')) { GET_TK_FIELD(token_idx, TkFieldKind) = TK_EQ; ++p; }
+                else if (IS_PUNCT(p, '!', '=')) { GET_TK_FIELD(token_idx, TkFieldKind) = TK_NE; ++p; }
+                else if (IS_PUNCT(p, '&', '&')) { GET_TK_FIELD(token_idx, TkFieldKind) = TK_AND; ++p; }
+                else if (IS_PUNCT(p, '|', '|')) { GET_TK_FIELD(token_idx, TkFieldKind) = TK_OR; ++p; }
                 else if (*p == '+') {
-                    if (p[1] == '+') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_INC; ++p; }
-                    else if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_ADD_ASSIGN; ++p; }
+                    if (p[1] == '+') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_INC; ++p; }
+                    else if (p[1] == '=') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_ADD_ASSIGN; ++p; }
                 } else if (*p == '-') {
-                    if (p[1] == '-') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_DEC; ++p; }
-                    else if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_SUB_ASSIGN; ++p; }
+                    if (p[1] == '-') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_DEC; ++p; }
+                    else if (p[1] == '=') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_SUB_ASSIGN; ++p; }
                 } else if (*p == '>') {
-                    if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_GE; ++p; }
-                    else if (p[1] == '>') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_RSHIFT; ++p; }
+                    if (p[1] == '=') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_GE; ++p; }
+                    else if (p[1] == '>') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_RSHIFT; ++p; }
                 } else if (*p == '<') {
-                    if (p[1] == '=') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_LE; ++p; }
-                    else if (p[1] == '<') { GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_LSHIFT; ++p; }
+                    if (p[1] == '=') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_LE; ++p; }
+                    else if (p[1] == '<') { GET_TK_FIELD(token_idx, TkFieldKind) = TK_LSHIFT; ++p; }
                 }
 
-                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = ++p;
+                GET_TK_FIELD(token_idx++, TkFieldEnd) = ++p;
             }
         }
     }
-    return;
+    return token_idx;
 }
 
 //--------------------------------- CODEGEN ----------------------------------//
@@ -953,10 +952,10 @@ void obj() {
     return;
 }
 
-void gen(int argc, char** argv) {
+void gen(int argc, char** argv, int token_count) {
     enter_scope();
 
-    while (g_tkIter < g_token_idx) {
+    while (g_tkIter < token_count) {
         obj();
     }
 
@@ -1118,10 +1117,10 @@ int main(int argc, char **argv) {
     g_src[src_len] = 0;
 
     // lexing
-    lex();
+    int token_count = lex(g_src);
 
     // code generation
-    gen(argc - 1, argv + 1);
+    gen(argc - 1, argv + 1, token_count);
 
     // run
     g_regs = g_ram + g_reserved - 4 * IMME;

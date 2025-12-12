@@ -31,7 +31,6 @@ int strlen(char* p) {
 }
 #pragma endregion utils
 
-#pragma region token
 
 enum {
  _TK_START = 128,
@@ -72,6 +71,7 @@ enum {
 };
 
 
+
 enum {
  TkFieldKind,
  TkFieldValue,
@@ -82,10 +82,7 @@ enum {
  _TkFieldCount,
 };
 
-int* g_token_buffer,
-     g_token_idx;
-
-
+int* g_token_buffer;
 
 void check_if_token_keyword(int token_idx) {
  char* keywords = "int\0     char\0    void\0    break\0   continue\0"
@@ -109,12 +106,8 @@ void check_if_token_keyword(int token_idx) {
     return;
 }
 
-#pragma endregion token
-
-
 
 char *g_ram, *g_src;
-
 int g_reserved, g_bss,
     g_tkIter,
     *g_syms, g_symCnt,
@@ -123,6 +116,7 @@ int g_reserved, g_bss,
     g_entry,
     g_scopeId, *g_scopes, g_scopeCnt,
     *g_calls, g_callCnt;
+
 
 int parse_escape_sequence(int letter, int ln) {
  if (letter == '0') return '\0';
@@ -137,121 +131,86 @@ int parse_escape_sequence(int letter, int ln) {
  return 0;
 }
 
-void lex() {
+int lex(char* p) {
+    int token_idx = 0;
     int ln = 1;
-    char *p = g_src;
  while (*p) {
   if (*p == '#' || (*p == '/' && p[1] == '/')) {
    while (*p && *p != '\n') ++p;
-  } else if ((*p == ' ' || *p == 9 || *p == 10 || *p == 13)) {
-   ln += (*p == 10); ++p;
+  } else if ((*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) {
+   ln += (*p == '\n'); ++p;
   } else {
-            (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldLine]) = ln;
-            (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldBegin]) = (int)p;
+            (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldLine]) = ln;
+            (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldBegin]) = (int)p;
 
             if (((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z')) || *p == '_') {
-                (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_IDENT;
+                (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_IDENT;
                 ++p;
                 while (((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z')) || (*p >= '0' && *p <= '9') || *p == '_') {
                     ++p;
                 }
-                (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldEnd]) = (int)p;
-                check_if_token_keyword(g_token_idx);
-                g_token_idx += 1;
+                (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldEnd]) = (int)p;
+                check_if_token_keyword(token_idx);
+                token_idx += 1;
             } else if (*p == '0' && p[1] == 'x') {
-                (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_INT;
+                (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_INT;
                 int result = 0;
                 p += 2; while(((*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'F'))) {
                     result = (result << 4) + ((*p < 'A') ? (*p - '0') : (*p - 55));
                     ++p;
                 }
-                (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldValue]) = result;
-                (g_token_buffer[((g_token_idx++) * _TkFieldCount) + TkFieldEnd]) = p;
+                (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldValue]) = result;
+                (g_token_buffer[((token_idx++) * _TkFieldCount) + TkFieldEnd]) = p;
             } else if ((*p >= '0' && *p <= '9')) {
-                (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_INT;
+                (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_INT;
                 int result = 0;
                 while ((*p >= '0' && *p <= '9')) { result = result * 10 + (*p - '0'); ++p; }
-                (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldValue]) = result;
-                (g_token_buffer[((g_token_idx++) * _TkFieldCount) + TkFieldEnd]) = p;
+                (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldValue]) = result;
+                (g_token_buffer[((token_idx++) * _TkFieldCount) + TkFieldEnd]) = p;
             } else if (*p == '"') {
-                (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_STRING;
+                (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_STRING;
                 ++p; while (*p != '"') { ++p; };
-                (g_token_buffer[((g_token_idx++) * _TkFieldCount) + TkFieldEnd]) = ++p;
+                (g_token_buffer[((token_idx++) * _TkFieldCount) + TkFieldEnd]) = ++p;
             } else if (*p == '\'') {
 
-                (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_CHAR;
+                (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_CHAR;
                 int v = *(++p);
-                if (v == 92) {
+                if (v == '\\') {
                     v = parse_escape_sequence(*(++p), ln);
                 }
-                (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldValue]) = v;
-                (g_token_buffer[((g_token_idx++) * _TkFieldCount) + TkFieldEnd]) = (p += 2);
+                (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldValue]) = v;
+                (g_token_buffer[((token_idx++) * _TkFieldCount) + TkFieldEnd]) = (p += 2);
             } else {
-                (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = *p;
+                (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = *p;
 
-                if ((*p == '=' && p[1] == '=')) { (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_EQ; ++p; }
-                else if ((*p == '!' && p[1] == '=')) { (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_NE; ++p; }
-                else if ((*p == '&' && p[1] == '&')) { (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_AND; ++p; }
-                else if ((*p == '|' && p[1] == '|')) { (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_OR; ++p; }
+                if ((*p == '=' && p[1] == '=')) { (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_EQ; ++p; }
+                else if ((*p == '!' && p[1] == '=')) { (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_NE; ++p; }
+                else if ((*p == '&' && p[1] == '&')) { (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_AND; ++p; }
+                else if ((*p == '|' && p[1] == '|')) { (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_OR; ++p; }
                 else if (*p == '+') {
-                    if (p[1] == '+') { (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_INC; ++p; }
-                    else if (p[1] == '=') { (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_ADD_ASSIGN; ++p; }
+                    if (p[1] == '+') { (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_INC; ++p; }
+                    else if (p[1] == '=') { (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_ADD_ASSIGN; ++p; }
                 } else if (*p == '-') {
-                    if (p[1] == '-') { (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_DEC; ++p; }
-                    else if (p[1] == '=') { (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_SUB_ASSIGN; ++p; }
+                    if (p[1] == '-') { (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_DEC; ++p; }
+                    else if (p[1] == '=') { (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_SUB_ASSIGN; ++p; }
                 } else if (*p == '>') {
-                    if (p[1] == '=') { (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_GE; ++p; }
-                    else if (p[1] == '>') { (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_RSHIFT; ++p; }
+                    if (p[1] == '=') { (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_GE; ++p; }
+                    else if (p[1] == '>') { (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_RSHIFT; ++p; }
                 } else if (*p == '<') {
-                    if (p[1] == '=') { (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_LE; ++p; }
-                    else if (p[1] == '<') { (g_token_buffer[((g_token_idx) * _TkFieldCount) + TkFieldKind]) = TK_LSHIFT; ++p; }
+                    if (p[1] == '=') { (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_LE; ++p; }
+                    else if (p[1] == '<') { (g_token_buffer[((token_idx) * _TkFieldCount) + TkFieldKind]) = TK_LSHIFT; ++p; }
                 }
 
-                (g_token_buffer[((g_token_idx++) * _TkFieldCount) + TkFieldEnd]) = ++p;
+                (g_token_buffer[((token_idx++) * _TkFieldCount) + TkFieldEnd]) = ++p;
             }
         }
     }
-    return;
+    return token_idx;
 }
 
-
-void dump_tokens() {
-    printf("-------- lex --------\n");
-    int indent = 0, i = 0, ln = 0;
-    while (i < g_token_idx) {
-        int tkln = (g_token_buffer[((i) * _TkFieldCount) + TkFieldLine]);
-        int kind = (g_token_buffer[((i) * _TkFieldCount) + TkFieldKind]);
-        int start = (g_token_buffer[((i) * _TkFieldCount) + TkFieldBegin]);
-        int end = (g_token_buffer[((i) * _TkFieldCount) + TkFieldEnd]);
-        int len = end - start;
-        if (kind == '{') { indent += 1; }
-        else if (kind == '}') { indent -= 1; }
-        if (ln != tkln) {
-            printf("\n%-3d:%.*s", tkln, indent * 4, "                                        ");
-            ln = tkln;
-        }
-        char* names = "Int   Char  Void  Break Cont  Else  Enum  If    "
-                      "Ret   While Print Fopen Fgetc CallocMemsetExit  ";
-        printf("%.*s", len, start);
-        if (kind >= KW_int) {
-            printf("{");
-            char *p = names + 6 * (kind - KW_int); int ii = 0;
-            while (ii < 6) {
-                if (*p == ' ') break;
-                printf("%c", *p);
-                ++ii; ++p;
-            }
-            printf("}");
-        }
-        printf(" ");
-        ++i;
-    }
-    printf("\n");
-    return;
-}
 
 void enter_scope() {
-    if (g_scopeCnt >= 128) {
+    if (g_scopeCnt >= (128)) {
         panic("scope overflow");
     }
 
@@ -408,10 +367,10 @@ int primary_expr() {
             instruction(Push | (EAX << 24), 0);
             ++argc;
         }
-        if (argc > 8) panic("printf supports at most %d args");
-        instruction(Sub | (ESP << 8) | (ESP << 16) | (IMME << 24), ((8 - argc) << 2));
+        if (argc > (8)) panic("printf supports at most %d args");
+        instruction(Sub | (ESP << 8) | (ESP << 16) | (IMME << 24), (((8) - argc) << 2));
         instruction(KW_printf, argc);
-        instruction(Add | (ESP << 8) | (ESP << 16) | (IMME << 24), (8 << 2));
+        instruction(Add | (ESP << 8) | (ESP << 16) | (IMME << 24), ((8) << 2));
         expect(')');
         return KW_int;
     }
@@ -953,10 +912,10 @@ void obj() {
     return;
 }
 
-void gen(int argc, char** argv) {
+void gen(int argc, char** argv, int token_count) {
     enter_scope();
 
-    while (g_tkIter < g_token_idx) {
+    while (g_tkIter < token_count) {
         obj();
     }
 
@@ -1102,8 +1061,8 @@ int main(int argc, char **argv) {
     int tk_reserved = 4 * _TkFieldCount * (src_reserved >> 2);
     int sym_reserved = 4 * SymSize * (tk_reserved >> 8);
     int opcode_reserved = 4 * OpSize * (src_reserved >> 3);
-    int scope_reserved = 4 * 128;
-    int call_reserved = 4 * CallSize * 1024;
+    int scope_reserved = 4 * (128);
+    int call_reserved = 4 * CallSize * (1024);
     g_src = g_ram + (g_reserved - src_reserved);
     g_token_buffer = g_ram + (g_reserved - src_reserved - tk_reserved);
     g_syms = g_ram + (g_reserved - src_reserved - tk_reserved - sym_reserved);
@@ -1118,10 +1077,10 @@ int main(int argc, char **argv) {
     g_src[src_len] = 0;
 
 
-    lex();
+    int token_count = lex(g_src);
 
 
-    gen(argc - 1, argv + 1);
+    gen(argc - 1, argv + 1, token_count);
 
 
     g_regs = g_ram + g_reserved - 4 * IMME;
