@@ -18,6 +18,7 @@
 #define IS_PUNCT(P, A, B) (*P == A && P[1] == B)
 #define IS_TYPE(KIND) (KIND >= KW_int && KIND <= KW_void)
 #define ALIGN(x) ((x + 3) & -4)
+// @TODO: refactor error
 #define COMPILE_ERROR(...) { printf(__VA_ARGS__); exit(1); }
 #define PUSH(REG, VAL) instruction(Push | (REG << 24), VAL)
 #define POP(REG) instruction(Pop | (REG << 8), 0)
@@ -163,12 +164,22 @@ int g_reserved, g_bss,
     g_scopeId, *g_scopes, g_scopeCnt,
     *g_calls, g_callCnt;
 
+int parse_escape_sequence(int letter, int ln) {
+	if (letter == 'n') return '\n';
+	if (letter == 't') return '\t';
+	if (letter == '\\') return '\\';
+	if (letter == '0') return 0;
+
+	COMPILE_ERROR("error:%d: unknown escape sequence '\\%c'\n", ln, letter);
+	return 0;
+}
+
 void lex() {
     int ln = 1;
     char *p = g_src;
 	while (*p) {
 		if (*p == '#' || (*p == '/' && p[1] == '/')) { // handle '#' and comment '//'
-			while (*p && *p != 10) ++p;
+			while (*p && *p != '\n') ++p;
 		} else if (IS_WHITESPACE(*p)) { // handle whitespace
 			ln += (*p == 10); ++p;
 		} else {
@@ -203,10 +214,15 @@ void lex() {
                 GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_STRING;
                 ++p; while (*p != '"') { ++p; };
                 GET_TK_FIELD(g_token_idx++, TkFieldEnd) = ++p;
-            } else if (*p == 39) { // ascii '''
+            } else if (*p == '\'') {
+                // @TODO: handle escape
                 GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_CHAR;
-                GET_TK_FIELD(g_token_idx, TkFieldValue) = p[1];
-                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = (p += 3);
+                int v = *(++p); // skip opening '
+                if (v == 92) { // 92 is backslash, @TODO: fix it
+                    v = parse_escape_sequence(*(++p), ln);
+                }
+                GET_TK_FIELD(g_token_idx, TkFieldValue) = v;
+                GET_TK_FIELD(g_token_idx++, TkFieldEnd) = (p += 2); // skip char and closing '
             } else {
                 GET_TK_FIELD(g_token_idx, TkFieldKind) = *p;
 
@@ -343,11 +359,8 @@ int primary_expr() {
             int i = 1;
             while (i < len) {
                 int c = start[i];
-                if (c == 92) { // '\'
-                    c = start[i += 1];
-                    if (c == 'n') { c = 10; }
-                    else if (c == '0') { c = 0; }
-                    else { COMPILE_ERROR("error:%d: unknown escape sequence '%c'\n", ln, c); }
+                if (c == '\\') {
+                    c = parse_escape_sequence(start[i += 1], ln);
                 }
                 *((char*)g_bss++) = c;
                 ++i;
