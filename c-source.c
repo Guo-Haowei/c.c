@@ -133,8 +133,8 @@ void check_if_token_keyword(int token_idx) {
 		             "printf\0  fopen\0   fgetc\0   calloc\0  memset\0  "
 		             "exit\0    ";
 
-	int start = GET_TK_FIELD(token_idx, TkFieldBegin);
-	int token_len = GET_TK_FIELD(token_idx, TkFieldEnd) - start;
+	char* start = GET_TK_FIELD(token_idx, TkFieldBegin);
+	int token_len = (char*)GET_TK_FIELD(token_idx, TkFieldEnd) - start;
 
 	int idx = 0;
 	while (idx < (_KW_END - KW_int)) {
@@ -165,10 +165,13 @@ int g_reserved, g_bss,
     *g_calls, g_callCnt;
 
 int parse_escape_sequence(int letter, int ln) {
+	if (letter == '0') return '\0';
 	if (letter == 'n') return '\n';
+	if (letter == 'r') return '\r';
 	if (letter == 't') return '\t';
 	if (letter == '\\') return '\\';
-	if (letter == '0') return 0;
+	if (letter == '\'') return '\'';
+	if (letter == '"') return '"';
 
 	COMPILE_ERROR("error:%d: unknown escape sequence '\\%c'\n", ln, letter);
 	return 0;
@@ -184,7 +187,7 @@ void lex() {
 			ln += (*p == 10); ++p;
 		} else {
             GET_TK_FIELD(g_token_idx, TkFieldLine) = ln;
-            GET_TK_FIELD(g_token_idx, TkFieldBegin) = p;
+            GET_TK_FIELD(g_token_idx, TkFieldBegin) = (int)p;
 
             if (IS_LETTER(*p) || *p == '_') { // handle token or keyword
                 GET_TK_FIELD(g_token_idx, TkFieldKind) = TK_IDENT;
@@ -192,7 +195,7 @@ void lex() {
                 while (IS_LETTER(*p) || IS_DIGIT(*p) || *p == '_') {
                     ++p;
                 }
-                GET_TK_FIELD(g_token_idx, TkFieldEnd) = p;
+                GET_TK_FIELD(g_token_idx, TkFieldEnd) = (int)p;
                 check_if_token_keyword(g_token_idx);
                 g_token_idx += 1;
             } else if (*p == '0' && p[1] == 'x') { // handle hex number
