@@ -148,7 +148,7 @@ void check_if_token_keyword(int token_idx) {
 
 // @TODO: refactor
 char *g_ram, *g_src;
-int g_reserved, g_bss,
+int g_bss,
     g_tkIter,
     *g_syms, g_symCnt,
     *g_ops, g_opCnt,
@@ -267,7 +267,7 @@ void exit_scope() {
     while (SYM_ATTRIB(i, Scope) == g_scopes[g_scopeCnt - 1]) {
         --g_symCnt, --i;
     }
-    
+
     --g_scopeCnt;
     return;
 }
@@ -1080,7 +1080,6 @@ void dump_code() {
 #define FATAL_ERROR(fmt, ...) { printf("c.c: \033[31mfatal error\033[0m: " fmt "\ncompilation terminated.\n", ##__VA_ARGS__); exit(1); }
 
 int main(int argc, char **argv) {
-    // @TODO: better error handling
 	if (argc == 1) {
         FATAL_ERROR("no input files");
 		return 1;
@@ -1092,8 +1091,8 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-    g_reserved = 2 * CHUNK_SIZE * argc;
-    g_ram = calloc(g_reserved, 1); // @TODO: support calloc
+    int reserved_size_in_byte = 2 * CHUNK_SIZE * argc;
+    g_ram = calloc(reserved_size_in_byte, 1);
 
     // memory layout
     // | instructions | global variables | ... script memory ... | stack |
@@ -1103,11 +1102,11 @@ int main(int argc, char **argv) {
     int opcode_reserved = 4 * OpSize * (src_reserved >> 3);
     int scope_reserved = 4 * MAX_SCOPE;
     int call_reserved = 4 * CallSize * MAX_CALLS;
-    g_src = g_ram + (g_reserved - src_reserved);
-    g_token_buffer = g_ram + (g_reserved - src_reserved - tk_reserved);
-    g_syms = g_ram + (g_reserved - src_reserved - tk_reserved - sym_reserved);
-    g_scopes = g_ram + (g_reserved - src_reserved - tk_reserved - sym_reserved - scope_reserved);
-    g_calls = g_ram + (g_reserved - src_reserved - tk_reserved - sym_reserved - scope_reserved - call_reserved);
+    g_src = g_ram + (reserved_size_in_byte - src_reserved);
+    g_token_buffer = g_ram + (reserved_size_in_byte - src_reserved - tk_reserved);
+    g_syms = g_ram + (reserved_size_in_byte - src_reserved - tk_reserved - sym_reserved);
+    g_scopes = g_ram + (reserved_size_in_byte - src_reserved - tk_reserved - sym_reserved - scope_reserved);
+    g_calls = g_ram + (reserved_size_in_byte - src_reserved - tk_reserved - sym_reserved - scope_reserved - call_reserved);
     g_bss = g_ram + opcode_reserved;
     g_ops = g_ram;
 
@@ -1123,8 +1122,8 @@ int main(int argc, char **argv) {
     gen(argc - 1, argv + 1, token_count);
 
     // run
-    g_regs = g_ram + g_reserved - 4 * IMME;
-    g_regs[ESP] = g_ram + g_reserved - 4 * IMME;
+    g_regs = g_ram + reserved_size_in_byte - 4 * IMME;
+    g_regs[ESP] = g_ram + reserved_size_in_byte - 4 * IMME;
 
     int pc = g_entry;
     while (pc < g_opCnt) {
