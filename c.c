@@ -107,14 +107,13 @@ void check_if_token_keyword(int token_idx) {
 }
 
 
-char *g_ram, *g_src;
-int g_reserved, g_bss,
-    g_tkIter,
-    *g_syms, g_symCnt,
+int g_bss,
+    g_token_iter,
+    *g_syms, g_sym_count,
     *g_ops, g_opCnt,
     *g_regs,
     g_entry,
-    g_scopeId, *g_scopes, g_scopeCnt,
+    g_scope_id, *g_scopes, g_scope_count,
     *g_calls, g_callCnt;
 
 
@@ -210,48 +209,48 @@ int lex(char* p) {
 
 
 void enter_scope() {
-    if (g_scopeCnt >= (128)) {
+    if (g_scope_count >= (128)) {
         panic("scope overflow");
     }
 
-    g_scopes[g_scopeCnt++] = ++g_scopeId;
+    g_scopes[g_scope_count++] = ++g_scope_id;
     return;
 }
 
 void exit_scope() {
-    if (g_scopeCnt <= 0) {
+    if (g_scope_count <= 0) {
         panic("scope overflow");
     }
 
-    int i = g_symCnt - 1;
-    while (g_syms[((i) * SymSize) + Scope] == g_scopes[g_scopeCnt - 1]) {
-        --g_symCnt, --i;
+    int i = g_sym_count - 1;
+    while (g_syms[((i) * SymSize) + Scope] == g_scopes[g_scope_count - 1]) {
+        --g_sym_count, --i;
     }
 
-    --g_scopeCnt;
+    --g_scope_count;
     return;
 }
 
 int expect(int kind) {
-    if ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) != kind) {
-        int start = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldBegin]), end = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldEnd]);
-        { printf("error:%d: expected token '%c'(%d), got '%.*s'\n", (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldLine]), kind < 128 ? kind : ' ', kind, end - start, start); exit(1); }
-                                                                                                   ;
+    if ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) != kind) {
+        int start = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldBegin]), end = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldEnd]);
+        { printf("error:%d: expected token '%c'(%d), got '%.*s'\n", (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldLine]), kind < 128 ? kind : ' ', kind, end - start, start); exit(1); }
+                                                                                                       ;
     }
-    return g_tkIter++;
+    return g_token_iter++;
 }
 
 int expect_type() {
-    int base_type = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]);
+    int base_type = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]);
     if ((base_type >= KW_int && base_type <= KW_void)) {
-        ++g_tkIter;
+        ++g_token_iter;
         int ptr = 0;
-        while ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) == '*') { ptr = (ptr << 8) | 0xFF; ++g_tkIter; }
+        while ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) == '*') { ptr = (ptr << 8) | 0xFF; ++g_token_iter; }
         return (ptr << 16) | base_type;
     }
 
-    int start = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldBegin]), end = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldEnd]);
-    { printf("error:%d: expected type specifier, got '%.*s'\n", (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldLine]), end - start, start); exit(1); };
+    int start = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldBegin]), end = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldEnd]);
+    { printf("error:%d: expected type specifier, got '%.*s'\n", (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldLine]), end - start, start); exit(1); };
 }
 
 void instruction(int op, int imme) {
@@ -262,7 +261,7 @@ void instruction(int op, int imme) {
 }
 
 int primary_expr() {
-    int tkIdx = g_tkIter++;
+    int tkIdx = g_token_iter++;
     char* start = (g_token_buffer[((tkIdx) * _TkFieldCount) + TkFieldBegin]);
     char* end = (g_token_buffer[((tkIdx) * _TkFieldCount) + TkFieldEnd]);
     int ln = (g_token_buffer[((tkIdx) * _TkFieldCount) + TkFieldLine]);
@@ -288,12 +287,12 @@ int primary_expr() {
                 ++i;
             }
 
-            if ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) != TK_STRING) break;
-            start = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldBegin]);
-            end = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldEnd]);
-            ln = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldLine]);
+            if ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) != TK_STRING) break;
+            start = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldBegin]);
+            end = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldEnd]);
+            ln = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldLine]);
             len = end - start;
-            ++g_tkIter;
+            ++g_token_iter;
         }
 
         *((char*)g_bss++) = 0;
@@ -308,10 +307,10 @@ int primary_expr() {
     }
 
     if (kind == TK_IDENT) {
-        if ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) == '(') {
-            ++g_tkIter;
+        if ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) == '(') {
+            ++g_token_iter;
             int argc = 0;
-            while ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) != ')') {
+            while ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) != ')') {
                 if (argc > 0) expect(',');
                 assign_expr();
                 instruction(Push | (EAX << 24), 0);
@@ -327,7 +326,7 @@ int primary_expr() {
             return KW_int;
         }
 
-        int address = 0, type = Undefined, data_type = 0, i = g_symCnt - 1;
+        int address = 0, type = Undefined, data_type = 0, i = g_sym_count - 1;
         while (i >= 0) {
             int tmp = g_syms[((i) * SymSize) + TkIdx];
             char *tmpstart = (g_token_buffer[((tmp) * _TkFieldCount) + TkFieldBegin]), *tmpend = (g_token_buffer[((tmp) * _TkFieldCount) + TkFieldEnd]);
@@ -361,7 +360,7 @@ int primary_expr() {
     if (kind == KW_printf) {
         expect('(');
         int argc = 0;
-        while ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) != ')') {
+        while ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) != ')') {
             if (argc > 0) expect(',');
             assign_expr();
             instruction(Push | (EAX << 24), 0);
@@ -397,10 +396,10 @@ int primary_expr() {
 int post_expr() {
     int data_type = primary_expr();
     while (1) {
-        int kind = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]);
-        int ln = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldLine]);
+        int kind = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]);
+        int ln = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldLine]);
         if (kind == '[') {
-            ++g_tkIter;
+            ++g_token_iter;
             if (!(0xFF0000 & data_type)) {
                 { printf("error:%d: attempted to dereference a non-pointer type 0x%X\n", ln, data_type); exit(1); };
             }
@@ -418,7 +417,7 @@ int post_expr() {
             expect(']');
             data_type = ((data_type >> 8) & 0xFF0000) | ((data_type & 0xFFFF));
         } else if (kind == TK_INC || kind == TK_DEC) {
-            ++g_tkIter;
+            ++g_token_iter;
             instruction(Load | (EAX << 8) | (EDX << 16), 4);
             instruction(Mov | (EBX << 8) | (EAX << 24), 0);
             int value = ((0xFF0000 & data_type) && data_type != (0xFF0000 | KW_char)) ? 4 : 1;
@@ -433,27 +432,27 @@ int post_expr() {
 }
 
 int unary_expr() {
-    int kind = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]);
-    int ln = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldLine]);
+    int kind = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]);
+    int ln = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldLine]);
     if (kind == '!') {
-        ++g_tkIter;
+        ++g_token_iter;
         int data_type = unary_expr();
         instruction(((Not) | (EAX << 8) | (0 << 16) | (0 << 24)), 0);
         return data_type;
     }
     if (kind == '+') {
-        ++g_tkIter;
+        ++g_token_iter;
         return unary_expr();
     }
     if (kind == '-') {
-        ++g_tkIter;
+        ++g_token_iter;
         int data_type = unary_expr();
         instruction(Mov | (EBX << 8) | (IMME << 24), 0);
         instruction(Sub | (EAX << 8) | (EBX << 16) | (EAX << 24), (0));
         return data_type;
     }
     if (kind == '*') {
-        ++g_tkIter;
+        ++g_token_iter;
         int data_type = unary_expr();
         if (!(0xFF0000 & data_type)) {
             { printf("error:%d: attempted to dereference a non-pointer type 0x%X\n", ln, data_type); exit(1); };
@@ -465,7 +464,7 @@ int unary_expr() {
         return ((data_type >> 8) & 0xFF0000) | (0xFFFF & data_type);
     }
     if (kind == TK_INC || kind == TK_DEC) {
-        ++g_tkIter;
+        ++g_token_iter;
         int data_type = unary_expr();
         instruction(Load | (EAX << 8) | (EDX << 16), 4);
         int value = ((0xFF0000 & data_type) && data_type != (0xFF0000 | KW_char)) ? 4 : 1;
@@ -478,10 +477,10 @@ int unary_expr() {
 }
 
 int cast_expr() {
-    if ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) == '(') {
-        int kind = (g_token_buffer[((g_tkIter + 1) * _TkFieldCount) + TkFieldKind]);
+    if ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) == '(') {
+        int kind = (g_token_buffer[((g_token_iter + 1) * _TkFieldCount) + TkFieldKind]);
         if ((kind >= KW_int && kind <= KW_void)) {
-            ++g_tkIter;
+            ++g_token_iter;
             int data_type = expect_type();
             expect(')');
             cast_expr();
@@ -495,12 +494,12 @@ int cast_expr() {
 int mul_expr() {
     int data_type = cast_expr();
     while (1) {
-        int kind = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]), opcode;
+        int kind = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]), opcode;
         if (kind == '*') opcode = Mul;
         else if (kind == '/') opcode = Div;
         else if (kind == '%') opcode = Rem;
         else break;
-        ++g_tkIter;
+        ++g_token_iter;
         instruction(Push | (EAX << 24), 0);
         cast_expr();
         instruction(Pop | (EBX << 8), 0);
@@ -513,16 +512,16 @@ int mul_expr() {
 int add_expr() {
     int data_type = mul_expr();
     while (1) {
-        int kind = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]), opcode;
+        int kind = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]), opcode;
         if (kind == '+') opcode = Add;
         else if (kind == '-') opcode = Sub;
         else break;
-        ++g_tkIter;
+        ++g_token_iter;
         instruction(Push | (EAX << 24), 0);
         int rhs = mul_expr();
         if ((0xFF0000 & data_type) && (0xFF0000 & rhs)) {
             if (data_type != rhs) {
-                { printf("error:%d: type mismatch", (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldLine])); exit(1); };
+                { printf("error:%d: type mismatch", (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldLine])); exit(1); };
             }
             if (data_type != (0xFF0000 | KW_char)) {
                 panic("TODO: handle subtraction other than char* - char*");
@@ -540,9 +539,9 @@ int add_expr() {
 int shift_expr() {
     int data_type = add_expr();
     while (1) {
-        int kind = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]);
+        int kind = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]);
         if (kind != TK_LSHIFT && kind != TK_RSHIFT) break;
-        ++g_tkIter;
+        ++g_token_iter;
         instruction(Push | (EAX << 24), 0);
         add_expr();
         instruction(Pop | (EBX << 8), 0);
@@ -555,7 +554,7 @@ int shift_expr() {
 int relation_expr() {
     int data_type = shift_expr();
     while (1) {
-        int kind = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]), opcode;
+        int kind = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]), opcode;
         if (kind == TK_NE) opcode = Neq;
         else if (kind == TK_EQ) opcode = Eq;
         else if (kind == '<') opcode = Lt;
@@ -564,7 +563,7 @@ int relation_expr() {
         else if (kind == '<') opcode = Lt;
         else if (kind == TK_LE) opcode = Le;
         else break;
-        ++g_tkIter;
+        ++g_token_iter;
         instruction(Push | (EAX << 24), 0);
         shift_expr();
         instruction(Pop | (EBX << 8), 0);
@@ -576,11 +575,11 @@ int relation_expr() {
 int bit_expr() {
     int data_type = relation_expr();
     while (1) {
-        int kind = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]), opcode;
+        int kind = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]), opcode;
         if (kind == '&') opcode = And;
         else if (kind == '|') opcode = Or;
         else break;
-        ++g_tkIter;
+        ++g_token_iter;
         instruction(Push | (EAX << 24), 0);
         relation_expr();
         instruction(Pop | (EBX << 8), 0);
@@ -592,12 +591,12 @@ int bit_expr() {
 int logical_expr() {
     int data_type = bit_expr();
     while (1) {
-        int kind = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]), opcode;
+        int kind = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]), opcode;
         if (kind == TK_AND) opcode = Jz;
         else if (kind == TK_OR) opcode = Jnz;
         else break;
 
-        ++g_tkIter;
+        ++g_token_iter;
         int skip = g_opCnt;
         instruction(opcode, 0);
         bit_expr();
@@ -611,9 +610,9 @@ int logical_expr() {
 int assign_expr() {
     int data_type = logical_expr();
     while (1) {
-        int kind = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]);
+        int kind = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]);
         if (kind == '=') {
-            ++g_tkIter;
+            ++g_token_iter;
             instruction(Push | (EDX << 24), 0);
             logical_expr();
             instruction(Pop | (EDX << 8), 0);
@@ -622,7 +621,7 @@ int assign_expr() {
         }
 
         if (kind == TK_ADD_ASSIGN) {
-            ++g_tkIter;
+            ++g_token_iter;
             instruction(Push | (EDX << 24), 0);
             relation_expr();
             instruction(Pop | (EDX << 8), 0);
@@ -634,7 +633,7 @@ int assign_expr() {
         }
 
         if (kind == TK_SUB_ASSIGN) {
-            ++g_tkIter;
+            ++g_token_iter;
             instruction(Push | (EDX << 24), 0);
             relation_expr();
             instruction(Pop | (EDX << 8), 0);
@@ -646,7 +645,7 @@ int assign_expr() {
         }
 
         if (kind == '?') {
-            ++g_tkIter;
+            ++g_token_iter;
             int goto_L1 = g_opCnt;
             instruction(Jz, 0);
             int lhs = expr();
@@ -667,17 +666,17 @@ int assign_expr() {
 
 int expr() {
     int type = assign_expr();
-    while ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) == ',') {
-        g_tkIter += 1;
+    while ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) == ',') {
+        g_token_iter += 1;
         type = assign_expr();
     }
     return type;
 }
 
 void stmt() {
-    int kind = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]);
+    int kind = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]);
     if (kind == KW_return) {
-        if ((g_token_buffer[((++g_tkIter) * _TkFieldCount) + TkFieldKind]) != ';') { assign_expr(); }
+        if ((g_token_buffer[((++g_token_iter) * _TkFieldCount) + TkFieldKind]) != ';') { assign_expr(); }
         instruction(Mov | (ESP << 8) | (EBP << 24), 0);
         instruction(Pop | (EBP << 8), 0);
         instruction(Ret, 0);
@@ -691,18 +690,18 @@ void stmt() {
 
 
 
-        ++g_tkIter;
+        ++g_token_iter;
         expect('('); expr(); expect(')');
         int goto_L1 = g_opCnt;
         instruction(Jz, 0);
         stmt();
 
-        if ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) != KW_else) {
+        if ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) != KW_else) {
             g_ops[((goto_L1) * OpSize) + Imme] = g_opCnt;
             return;
         }
 
-        ++g_tkIter;
+        ++g_token_iter;
         int goto_L2 = g_opCnt;
         instruction(Jump, g_opCnt + 1);
         g_ops[((goto_L1) * OpSize) + Imme] = g_opCnt;
@@ -718,7 +717,7 @@ void stmt() {
 
 
         int label_cont = g_opCnt;
-        ++g_tkIter;
+        ++g_token_iter;
         expect('('); expr(); expect(')');
         int goto_end = g_opCnt;
         instruction(Jz, 0);
@@ -736,14 +735,14 @@ void stmt() {
     }
 
     if (kind == KW_break) {
-        ++g_tkIter;
+        ++g_token_iter;
         instruction(_BreakStub, 0);
         expect(';');
         return;
     }
 
     if (kind == KW_continue) {
-        ++g_tkIter;
+        ++g_token_iter;
         instruction(_ContStub, 0);
         expect(';');
         return;
@@ -751,12 +750,12 @@ void stmt() {
 
     if (kind == '{') {
         enter_scope();
-        ++g_tkIter;
+        ++g_token_iter;
         int restore = 0;
-        while ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) != '}') {
-            kind = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]);
+        while ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) != '}') {
+            kind = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]);
             if ((kind >= KW_int && kind <= KW_void)) {
-                ++g_tkIter;
+                ++g_token_iter;
                 int base_type = kind, varNum = 0;
                 while (1) {
                     if (varNum > 0) {
@@ -764,37 +763,37 @@ void stmt() {
                     }
 
                     int ptr = 0;
-                    while ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) == '*') { ptr = (ptr << 8) | 0xFF; ++g_tkIter; }
-                    int id = expect(TK_IDENT), prev = g_symCnt - 1;
-                    g_syms[((g_symCnt) * SymSize) + Address] = 4;
+                    while ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) == '*') { ptr = (ptr << 8) | 0xFF; ++g_token_iter; }
+                    int id = expect(TK_IDENT), prev = g_sym_count - 1;
+                    g_syms[((g_sym_count) * SymSize) + Address] = 4;
 
                     if (prev >= 0 && g_syms[((prev) * SymSize) + Storage] == Local) {
-                        g_syms[((g_symCnt) * SymSize) + Address] += g_syms[((prev) * SymSize) + Address];
+                        g_syms[((g_sym_count) * SymSize) + Address] += g_syms[((prev) * SymSize) + Address];
                     }
 
-                    g_syms[((g_symCnt) * SymSize) + Storage] = Local;
-                    g_syms[((g_symCnt) * SymSize) + TkIdx] = id;
-                    g_syms[((g_symCnt) * SymSize) + Scope] = g_scopes[g_scopeCnt - 1];
-                    g_syms[((g_symCnt) * SymSize) + DType] = (ptr << 16) | base_type;
+                    g_syms[((g_sym_count) * SymSize) + Storage] = Local;
+                    g_syms[((g_sym_count) * SymSize) + TkIdx] = id;
+                    g_syms[((g_sym_count) * SymSize) + Scope] = g_scopes[g_scope_count - 1];
+                    g_syms[((g_sym_count) * SymSize) + DType] = (ptr << 16) | base_type;
 
                     instruction(Sub | (ESP << 8) | (ESP << 16) | (IMME << 24), (4));
-                    if ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) == '=') {
-                        ++g_tkIter;
+                    if ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) == '=') {
+                        ++g_token_iter;
                         assign_expr();
-                        instruction(Sub | (EDX << 8) | (EBP << 16) | (IMME << 24), (g_syms[((g_symCnt) * SymSize) + Address]));
+                        instruction(Sub | (EDX << 8) | (EBP << 16) | (IMME << 24), (g_syms[((g_sym_count) * SymSize) + Address]));
                         instruction(Save | (EDX << 8) | (EAX << 16), 4);;
                     }
 
-                    ++restore, ++varNum, ++g_symCnt;
-                    if ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) == ';') { break; }
+                    ++restore, ++varNum, ++g_sym_count;
+                    if ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) == ';') { break; }
                 }
 
-                ++g_tkIter;
+                ++g_token_iter;
             } else {
                 stmt();
             }
         }
-        ++g_tkIter;
+        ++g_token_iter;
 
         if (restore) { instruction(Add | (ESP << 8) | (ESP << 16) | (IMME << 24), (restore << 2)); }
         exit_scope();
@@ -802,7 +801,7 @@ void stmt() {
     }
 
     if (kind == ';') {
-        ++g_tkIter;
+        ++g_token_iter;
         return;
     }
 
@@ -812,92 +811,97 @@ void stmt() {
 }
 
 
-void obj() {
-    int kind = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]);
+void parse_declaration() {
+    int kind = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]);
+
+
     if (kind == KW_enum) {
-        ++g_tkIter;
+        ++g_token_iter;
         expect('{');
         int val = 0;
-        while ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) != '}') {
+        while ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) != '}') {
             int idx = expect(TK_IDENT);
-            g_syms[((g_symCnt) * SymSize) + TkIdx] = idx;
-            g_syms[((g_symCnt) * SymSize) + Storage] = Const;
-            g_syms[((g_symCnt) * SymSize) + DType] = KW_int;
-            g_syms[((g_symCnt) * SymSize) + Scope] = g_scopes[g_scopeCnt - 1];
+            g_syms[((g_sym_count) * SymSize) + TkIdx] = idx;
+            g_syms[((g_sym_count) * SymSize) + Storage] = Const;
+            g_syms[((g_sym_count) * SymSize) + DType] = KW_int;
+            g_syms[((g_sym_count) * SymSize) + Scope] = g_scopes[g_scope_count - 1];
 
-            if ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) == '=') {
-                ++g_tkIter;
+            if ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) == '=') {
+                ++g_token_iter;
                 idx = expect(TK_INT);
                 val = (g_token_buffer[((idx) * _TkFieldCount) + TkFieldValue]);
             }
 
-            g_syms[((g_symCnt++) * SymSize) + Address] = val++;
+            g_syms[((g_sym_count++) * SymSize) + Address] = val++;
 
-            if ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) == '}') { break; }
+            if ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) == '}') { break; }
             expect(',');
         }
-        ++g_tkIter;
+        ++g_token_iter;
         expect(';');
         return;
     }
 
-    int ln = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldLine]);
-    int start = (g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldBegin]);
-    int end = (g_token_buffer[((g_tkIter++) * _TkFieldCount) + TkFieldEnd]);
+
+
+
+    int ln = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldLine]);
+    int start = (g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldBegin]);
+    int end = (g_token_buffer[((g_token_iter++) * _TkFieldCount) + TkFieldEnd]);
     if (!(kind >= KW_int && kind <= KW_void)) {
         { printf("error:%d: unexpected token '%.*s'\n", ln, end - start, start); exit(1); };
     }
 
-    while ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) != ';') {
+    while ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) != ';') {
         int data_type = kind, ptr = 0;
-        while ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) == '*') {
+        while ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) == '*') {
             ptr = (ptr << 8) | 0xFF;
-            ++g_tkIter;
+            ++g_token_iter;
         }
         data_type = (ptr << 16) | data_type;
 
         int id = expect(TK_IDENT);
 
-        if ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) != '(') {
-            g_syms[((g_symCnt) * SymSize) + Storage] = Global;
-            g_syms[((g_symCnt) * SymSize) + TkIdx] = id;
-            g_syms[((g_symCnt) * SymSize) + Scope] = g_scopes[g_scopeCnt - 1];
-            g_syms[((g_symCnt) * SymSize) + DType] = data_type;
+        if ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) != '(') {
+            g_syms[((g_sym_count) * SymSize) + Storage] = Global;
+            g_syms[((g_sym_count) * SymSize) + TkIdx] = id;
+            g_syms[((g_sym_count) * SymSize) + Scope] = g_scopes[g_scope_count - 1];
+            g_syms[((g_sym_count) * SymSize) + DType] = data_type;
             *((int*)g_bss) = 0;
-            g_syms[((g_symCnt++) * SymSize) + Address] = g_bss;
+            g_syms[((g_sym_count++) * SymSize) + Address] = g_bss;
             g_bss += 4;
-            if ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) != ';') { expect(','); }
+            if ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) != ';') { expect(','); }
             continue;
         }
 
         if (streq("main", (g_token_buffer[((id) * _TkFieldCount) + TkFieldBegin]), 4)) {
             g_entry = g_opCnt;
         } else {
-            g_syms[((g_symCnt) * SymSize) + Storage] = Func;
-            g_syms[((g_symCnt) * SymSize) + TkIdx] = id;
-            g_syms[((g_symCnt) * SymSize) + DType] = data_type;
-            g_syms[((g_symCnt) * SymSize) + Scope] = g_scopes[g_scopeCnt - 1];
-            g_syms[((g_symCnt++) * SymSize) + Address] = g_opCnt;
+            g_syms[((g_sym_count) * SymSize) + Storage] = Func;
+            g_syms[((g_sym_count) * SymSize) + TkIdx] = id;
+            g_syms[((g_sym_count) * SymSize) + DType] = data_type;
+            g_syms[((g_sym_count) * SymSize) + Scope] = g_scopes[g_scope_count - 1];
+            g_syms[((g_sym_count++) * SymSize) + Address] = g_opCnt;
         }
 
         enter_scope();
         expect('(');
         int argCnt = 0, i = 1;
-        while ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) != ')') {
+        while ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) != ')') {
             if (argCnt > 0) { expect(','); }
             int data_type = expect_type();
             int ptr = 0;
-            while ((g_token_buffer[((g_tkIter) * _TkFieldCount) + TkFieldKind]) == '*') { ptr = (ptr << 8) | 0xFF; ++g_tkIter; }
+            while ((g_token_buffer[((g_token_iter) * _TkFieldCount) + TkFieldKind]) == '*') { ptr = (ptr << 8) | 0xFF; ++g_token_iter; }
             data_type = (ptr << 16) | data_type;
-            g_syms[((g_symCnt) * SymSize) + TkIdx] = expect(TK_IDENT);
-            g_syms[((g_symCnt) * SymSize) + Scope] = g_scopes[g_scopeCnt - 1];
-            g_syms[((g_symCnt) * SymSize) + DType] = data_type;
-            g_syms[((g_symCnt++) * SymSize) + Storage] = Param;
+            g_syms[((g_sym_count) * SymSize) + TkIdx] = expect(TK_IDENT);
+            g_syms[((g_sym_count) * SymSize) + Scope] = g_scopes[g_scope_count - 1];
+            g_syms[((g_sym_count) * SymSize) + DType] = data_type;
+            g_syms[((g_sym_count++) * SymSize) + Storage] = Param;
             ++argCnt;
         }
         expect(')');
         while (i <= argCnt) {
-            g_syms[((g_symCnt - i) * SymSize) + Address] = -((i + 1) << 2);
+            g_syms[((g_sym_count - i) * SymSize) + Address] = -((i + 1) << 2);
             ++i;
         }
 
@@ -908,15 +912,16 @@ void obj() {
         exit_scope();
         return;
     }
-    ++g_tkIter;
+    ++g_token_iter;
     return;
 }
 
 void gen(int argc, char** argv, int token_count) {
     enter_scope();
 
-    while (g_tkIter < token_count) {
-        obj();
+
+    while (g_token_iter < token_count) {
+        parse_declaration();
     }
 
     int i = 0;
@@ -928,7 +933,7 @@ void gen(int argc, char** argv, int token_count) {
         int len = end - start;
 
         int found = 0, j = 0;
-        while (j < g_symCnt) {
+        while (j < g_sym_count) {
             if (g_syms[((j) * SymSize) + Storage] == Func) {
                 int funcIdx = g_syms[((j) * SymSize) + TkIdx];
                 if (streq(start, (g_token_buffer[((funcIdx) * _TkFieldCount) + TkFieldBegin]), len)) {
@@ -1040,7 +1045,6 @@ void dump_code() {
 
 
 int main(int argc, char **argv) {
-
  if (argc == 1) {
         { printf("c.c: \033[31mfatal error\033[0m: " "no input files" "\ncompilation terminated.\n"); exit(1); };
   return 1;
@@ -1052,8 +1056,8 @@ int main(int argc, char **argv) {
   return 1;
  }
 
-    g_reserved = 2 * (1 << 27) * argc;
-    g_ram = calloc(g_reserved, 1);
+ int reserved_size_in_byte = 2 * (1 << 27) * argc;
+ char* ram = calloc(reserved_size_in_byte, 1);
 
 
 
@@ -1063,28 +1067,30 @@ int main(int argc, char **argv) {
     int opcode_reserved = 4 * OpSize * (src_reserved >> 3);
     int scope_reserved = 4 * (128);
     int call_reserved = 4 * CallSize * (1024);
-    g_src = g_ram + (g_reserved - src_reserved);
-    g_token_buffer = g_ram + (g_reserved - src_reserved - tk_reserved);
-    g_syms = g_ram + (g_reserved - src_reserved - tk_reserved - sym_reserved);
-    g_scopes = g_ram + (g_reserved - src_reserved - tk_reserved - sym_reserved - scope_reserved);
-    g_calls = g_ram + (g_reserved - src_reserved - tk_reserved - sym_reserved - scope_reserved - call_reserved);
-    g_bss = g_ram + opcode_reserved;
-    g_ops = g_ram;
+    char* source_code = ram + (reserved_size_in_byte - src_reserved);
+    g_token_buffer = ram + (reserved_size_in_byte - src_reserved - tk_reserved);
+    g_syms = ram + (reserved_size_in_byte - src_reserved - tk_reserved - sym_reserved);
+    g_scopes = ram + (reserved_size_in_byte - src_reserved - tk_reserved - sym_reserved - scope_reserved);
+    g_calls = ram + (reserved_size_in_byte - src_reserved - tk_reserved - sym_reserved - scope_reserved - call_reserved);
+    g_bss = ram + opcode_reserved;
+    g_ops = ram;
 
 
-    int src_len = 0, c;
-    while ((c = fgetc(fp)) != -1) { g_src[src_len++] = c; }
-    g_src[src_len] = 0;
+ int src_len = 0, c;
+ while ((c = fgetc(fp)) != -1) {
+  source_code[src_len++] = c;
+ }
+    source_code[src_len] = 0;
 
 
-    int token_count = lex(g_src);
+    int token_count = lex(source_code);
 
 
     gen(argc - 1, argv + 1, token_count);
 
 
-    g_regs = g_ram + g_reserved - 4 * IMME;
-    g_regs[ESP] = g_ram + g_reserved - 4 * IMME;
+    g_regs = ram + reserved_size_in_byte - 4 * IMME;
+    g_regs[ESP] = ram + reserved_size_in_byte - 4 * IMME;
 
     int pc = g_entry;
     while (pc < g_opCnt) {
@@ -1165,7 +1171,7 @@ int main(int argc, char **argv) {
             int* p = g_regs[ESP];
             g_regs[EAX] = fopen((char*)(p[1]), (char*)(p[0]));
         } else if (op == KW_calloc) {
-            g_regs[EAX] = g_ram + (1 << 27);
+            g_regs[EAX] = ram + (1 << 27);
         } else if (op == KW_exit) {
             g_regs[EAX] = *((int*)g_regs[ESP]);
             break;
