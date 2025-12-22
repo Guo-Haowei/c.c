@@ -55,7 +55,7 @@ void panic(char* fmt) {
     exit(1);
 }
 
-int streq(char* p1, char* p2, int len) {
+int string_equal(char* p1, char* p2, int len) {
     while (len--) {
         if (*p1 == 0 || *p2 == 0) return 1;
         if (*p1 != *p2) return 0;
@@ -64,7 +64,7 @@ int streq(char* p1, char* p2, int len) {
     return 1;
 }
 
-int strlen(char* p) {
+int string_length(char* p) {
     int len = 0;
     while (*p++) { len += 1; }
     return len;
@@ -136,8 +136,8 @@ void check_if_token_keyword(int token_idx) {
 	int idx = 0;
 	while (idx < (_KW_END - KW_int)) {
 		char* kw = keywords + (idx * 9); // a keyword is at most 8 char, plus '\0'
-		int keyword_len = strlen(kw);
-		if (keyword_len == token_len && streq(start, kw, 8)) {
+		int keyword_len = string_length(kw);
+		if (keyword_len == token_len && string_equal(start, kw, 8)) {
 			GET_TK_FIELD(token_idx, TkFieldKind) = KW_int + idx;
 			break;
 		}
@@ -370,7 +370,7 @@ int primary_expr() {
         while (i >= 0) {
             int tmp = SYM_ATTRIB(i, TkIdx);
             char *tmpstart = GET_TK_FIELD(tmp, TkFieldBegin), *tmpend = GET_TK_FIELD(tmp, TkFieldEnd);
-            if (len == (tmpend - tmpstart) && streq(start, tmpstart, len)) {
+            if (len == (tmpend - tmpstart) && string_equal(start, tmpstart, len)) {
                 address = SYM_ATTRIB(i, Address);
                 type = SYM_ATTRIB(i, Storage);
                 data_type = SYM_ATTRIB(i, DType);
@@ -914,7 +914,7 @@ void parse_declaration() {
             continue;
         }
 
-        if (streq("main", GET_TK_FIELD(id, TkFieldBegin), 4)) {
+        if (string_equal("main", GET_TK_FIELD(id, TkFieldBegin), 4)) {
             g_entry = g_opCnt;
         } else {
             SYM_ATTRIB(g_sym_count, Storage) = Func;
@@ -976,7 +976,7 @@ void gen(int argc, char** argv, int token_count) {
         while (j < g_sym_count) {
             if (SYM_ATTRIB(j, Storage) == Func) {
                 int funcIdx = SYM_ATTRIB(j, TkIdx);
-                if (streq(start, GET_TK_FIELD(funcIdx, TkFieldBegin), len)) {
+                if (string_equal(start, GET_TK_FIELD(funcIdx, TkFieldBegin), len)) {
                     found = 1;
                     /// NOTE: potential error here?
                     OP_ATTRIB(CALL_ATTRIB(i, InsIdx), Imme) = SYM_ATTRIB(j, Address);
