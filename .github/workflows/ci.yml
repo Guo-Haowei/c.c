@@ -2,33 +2,32 @@ name: CI
 run-name: ${{ github.actor }} is testing out GitHub Actions
 on: [push]
 jobs:
-  build:
+  test-debug-build-windows:
     runs-on: windows-latest
     steps:
       - name: Download Source Code
         uses: actions/checkout@v4
       - run: dir
       - name: Configure CMake
-        uses: actions/checkout@v4
-      - run: cmake -S . -B build -A Win32
+        run: cmake -S . -B build -A Win32
       - name: Build with CMake
         run: cmake --build build --config Debug
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: cc
-          path: ./build/Debug/c.c.exe
+      - name: Move binary
+        run: move .\build\Debug\c.c.exe c.c.exe
+      - name: Run Tests
+        run: python -u scripts/run_tests.py
 
-  test:
+  test-release-build-windows:
     runs-on: windows-latest
-    needs: build
     steps:
       - name: Download Source Code
         uses: actions/checkout@v4
       - run: dir
-      - name: Download Build Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: cc
+      - name: Configure CMake
+        run: cmake -S . -B build -A Win32
+      - name: Build with CMake
+        run: cmake --build build --config Release
+      - name: Move binary
+        run: move .\build\Release\c.c.exe c.c.exe
       - name: Run Tests
         run: python -u scripts/run_tests.py
