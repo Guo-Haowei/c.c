@@ -9,11 +9,25 @@ jobs:
         uses: actions/checkout@v4
       - run: dir
       - name: Configure CMake
-        uses: actions/checkout@v4
-      - run: cmake -S . -B build -A Win32
+        run: cmake -S . -B build -A Win32
       - name: Build with CMake
         run: cmake --build build --config Debug
       - name: Move binary
         run: move .\build\Debug\c.c.exe c.c.exe
+      - name: Run Tests
+        run: python -u scripts/run_tests.py
+
+  test-release-build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Download Source Code
+        uses: actions/checkout@v4
+      - run: dir
+      - name: Configure CMake
+        run: cmake -S . -B build -A Win32
+      - name: Build with CMake
+        run: cmake --build build --config Release
+      - name: Move binary
+        run: move .\build\Release\c.c.exe c.c.exe
       - name: Run Tests
         run: python -u scripts/run_tests.py
