@@ -14,6 +14,6 @@ jobs:
       - name: Build with CMake
         run: cmake --build build --config Debug
       - name: Move binary
-        run: move .\build\Debug\c.exe c.c.exe
+        run: move .\build\Debug\c.c.exe c.c.exe
       - name: Run Tests
         run: python -u scripts/run_tests.py
